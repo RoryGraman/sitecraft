@@ -2,9 +2,24 @@ import { useState } from 'react';
 import { PRIORITIES, type Priority, type ScriptError, type SiteScript } from '@sitecraft/shared';
 import { errorMessage, formatTime, truncate } from '../util';
 
+/**
+ * The edit and delete state of one card. The parent owns it, keyed by script
+ * id, so an open editor and its draft survive when the card leaves the list
+ * (a tab switch in page scope) or the list is rebuilt (a scope switch).
+ */
+export interface CardUi {
+  editing: boolean;
+  draft: string;
+  confirmDelete: boolean;
+}
+
+export const CARD_UI_CLOSED: CardUi = { editing: false, draft: '', confirmDelete: false };
+
 export interface ScriptCardProps {
   script: SiteScript;
   error?: ScriptError;
+  ui: CardUi;
+  onUi(patch: Partial<CardUi>): void;
   onToggle(enabled: boolean): Promise<void>;
   onPriority(priority: Priority): Promise<void>;
   onSaveCode(code: string): Promise<void>;
@@ -14,10 +29,7 @@ export interface ScriptCardProps {
 }
 
 export function ScriptCard(props: ScriptCardProps) {
-  const { script, error } = props;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(script.code);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { script, error, ui, onUi } = props;
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -82,15 +94,15 @@ export function ScriptCard(props: ScriptCardProps) {
         </label>
       </div>
 
-      {editing ? (
+      {ui.editing ? (
         <div className="card-edit">
           <textarea
             data-testid="script-code"
             className="code"
-            value={draft}
+            value={ui.draft}
             rows={8}
             spellCheck={false}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onUi({ draft: e.target.value })}
           />
           <div className="row">
             <button
@@ -100,8 +112,8 @@ export function ScriptCard(props: ScriptCardProps) {
               disabled={busy}
               onClick={() =>
                 void run(async () => {
-                  await props.onSaveCode(draft);
-                  setEditing(false);
+                  await props.onSaveCode(ui.draft);
+                  onUi({ editing: false });
                 })
               }
             >
@@ -111,10 +123,7 @@ export function ScriptCard(props: ScriptCardProps) {
               type="button"
               className="btn btn-small"
               data-testid="script-cancel-edit"
-              onClick={() => {
-                setDraft(script.code);
-                setEditing(false);
-              }}
+              onClick={() => onUi({ editing: false, draft: script.code })}
             >
               Cancel
             </button>
@@ -126,17 +135,14 @@ export function ScriptCard(props: ScriptCardProps) {
             type="button"
             className="btn btn-small"
             data-testid="script-edit"
-            onClick={() => {
-              setDraft(script.code);
-              setEditing(true);
-            }}
+            onClick={() => onUi({ editing: true, draft: script.code })}
           >
             Edit code
           </button>
           <button type="button" className="btn btn-small" data-testid="script-modify" onClick={props.onModify}>
             Modify with AI
           </button>
-          {confirmDelete ? (
+          {ui.confirmDelete ? (
             <span className="confirm">
               <span>Delete this script?</span>
               <button
@@ -152,7 +158,7 @@ export function ScriptCard(props: ScriptCardProps) {
                 type="button"
                 className="btn btn-small"
                 data-testid="script-delete-cancel"
-                onClick={() => setConfirmDelete(false)}
+                onClick={() => onUi({ confirmDelete: false })}
               >
                 Cancel
               </button>
@@ -162,7 +168,7 @@ export function ScriptCard(props: ScriptCardProps) {
               type="button"
               className="btn btn-small btn-quiet-danger"
               data-testid="script-delete"
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => onUi({ confirmDelete: true })}
             >
               Delete
             </button>

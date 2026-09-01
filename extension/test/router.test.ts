@@ -22,32 +22,12 @@ import {
   installScriptErrorHandler,
   isAllowedExternalOrigin,
   type Router,
+  type RouterDeps,
   type TabsApi,
 } from '../src/background/router';
-import { FakePort, FakeStorageArea, fakeNative, mkScript, resetIds, tick } from './router.fakes';
+import { FakePort, FakeStorageArea, fakeNative, mkScript, mkTab, resetIds, tick } from './router.fakes';
 
 const g = globalThis as unknown as { chrome?: unknown };
-
-function tab(overrides: Partial<chrome.tabs.Tab>): chrome.tabs.Tab {
-  return {
-    id: 1,
-    windowId: 1,
-    index: 0,
-    url: 'https://a.com/',
-    title: 'A',
-    active: false,
-    pinned: false,
-    highlighted: false,
-    incognito: false,
-    selected: false,
-    discarded: false,
-    autoDiscardable: true,
-    groupId: -1,
-    frozen: false,
-    lastAccessed: 0,
-    ...overrides,
-  } as chrome.tabs.Tab;
-}
 
 interface Harness {
   area: FakeStorageArea;
@@ -64,7 +44,7 @@ interface Harness {
   events(port: FakePort): SidebarEvent[];
 }
 
-function harness(scripts: SiteScript[] = [], tabList: chrome.tabs.Tab[] = []): Harness {
+function harness(scripts: SiteScript[] = [], tabList: chrome.tabs.Tab[] = [], opts: Pick<RouterDeps, 'devReload'> = {}): Harness {
   const area = new FakeStorageArea();
   area.data.scripts = scripts;
   const store = createStateStore(area.asArea());
@@ -79,10 +59,11 @@ function harness(scripts: SiteScript[] = [], tabList: chrome.tabs.Tab[] = []): H
       let list = tabList;
       if (info.active !== undefined) list = list.filter((t) => t.active === info.active);
       if (info.lastFocusedWindow) list = list.filter((t) => t.windowId === 1);
+      if (info.windowId !== undefined) list = list.filter((t) => t.windowId === info.windowId);
       return list;
     }),
     reload: vi.fn(async () => undefined),
-    create: vi.fn(async (props: chrome.tabs.CreateProperties) => tab({ id: 99, url: props.url ?? '' })),
+    create: vi.fn(async (props: chrome.tabs.CreateProperties) => mkTab({ id: 99, url: props.url ?? '' })),
   };
   const registerAll = vi.fn<(scripts: SiteScript[]) => Promise<RegisterAllResult>>(async () => ({
     registered: 1,
@@ -96,6 +77,7 @@ function harness(scripts: SiteScript[] = [], tabList: chrome.tabs.Tab[] = []): H
     registerAll,
     isUserScriptsAvailable: () => userScripts.available,
     tabs: tabs as unknown as TabsApi,
+    ...opts,
   });
   let seq = 0;
   const connect = (kind: 'internal' | 'external' = 'internal', origin?: string): FakePort => {
@@ -362,13 +344,13 @@ describe('router: export and import', () => {
 
 describe('router: tabs', () => {
   const tabs = [
-    tab({ id: 1, windowId: 1, url: 'chrome://extensions/', active: true, lastAccessed: 500 }),
-    tab({ id: 2, windowId: 1, url: 'https://a.com/', active: false, lastAccessed: 300 }),
-    tab({ id: 3, windowId: 2, url: 'http://localhost:4173/harness/index.html', active: true, lastAccessed: 400 }),
-    tab({ id: 4, windowId: 2, url: 'http://localhost:4174/', active: false, lastAccessed: 350 }),
-    tab({ id: 5, windowId: 2, url: 'file:///tmp/x.html', active: false, lastAccessed: 100 }),
-    tab({ id: 6, windowId: 2, url: 'about:blank', active: false, lastAccessed: 600 }),
-    tab({ id: 7, windowId: 2, url: undefined, active: false, lastAccessed: 700 }),
+    mkTab({ id: 1, windowId: 1, url: 'chrome://extensions/', active: true, lastAccessed: 500 }),
+    mkTab({ id: 2, windowId: 1, url: 'https://a.com/', active: false, lastAccessed: 300 }),
+    mkTab({ id: 3, windowId: 2, url: 'http://localhost:4173/harness/index.html', active: true, lastAccessed: 400 }),
+    mkTab({ id: 4, windowId: 2, url: 'http://localhost:4174/', active: false, lastAccessed: 350 }),
+    mkTab({ id: 5, windowId: 2, url: 'file:///tmp/x.html', active: false, lastAccessed: 100 }),
+    mkTab({ id: 6, windowId: 2, url: 'about:blank', active: false, lastAccessed: 600 }),
+    mkTab({ id: 7, windowId: 2, url: undefined, active: false, lastAccessed: 700 }),
   ];
 
   it('listTabs returns http, https and file tabs as TabInfo', async () => {
@@ -381,8 +363,8 @@ describe('router: tabs', () => {
 
   it('getDefaultTab on an internal port prefers the active tab of the focused window', async () => {
     const list = [
-      tab({ id: 1, windowId: 1, url: 'https://a.com/', active: true, lastAccessed: 1 }),
-      tab({ id: 2, windowId: 1, url: 'https://b.com/', active: false, lastAccessed: 999 }),
+      mkTab({ id: 1, windowId: 1, url: 'https://a.com/', active: true, lastAccessed: 1 }),
+      mkTab({ id: 2, windowId: 1, url: 'https://b.com/', active: false, lastAccessed: 999 }),
     ];
     const h = harness([], list);
     const port = h.connect('internal');
@@ -405,9 +387,58 @@ describe('router: tabs', () => {
   });
 
   it('getDefaultTab returns null when there is no web tab', async () => {
-    const h = harness([], [tab({ id: 1, url: 'chrome://newtab/', active: true })]);
+    const h = harness([], [mkTab({ id: 1, url: 'chrome://newtab/', active: true })]);
     const port = h.connect('internal');
     expect(await h.send(port, { type: 'getDefaultTab' })).toBeNull();
+  });
+
+  it('getActiveTab with a windowId returns the active web tab of that window', async () => {
+    const list = [
+      mkTab({ id: 1, windowId: 1, url: 'https://a.com/', title: 'A', active: true }),
+      mkTab({ id: 2, windowId: 2, url: 'https://b.com/', title: 'B', active: true }),
+      mkTab({ id: 3, windowId: 2, url: 'https://c.com/', title: 'C', active: false }),
+    ];
+    const h = harness([], list);
+    const port = h.connect('internal');
+    const active = (await h.send(port, { type: 'getActiveTab', windowId: 2 })) as TabInfo | null;
+    expect(active).toEqual({ tabId: 2, windowId: 2, url: 'https://b.com/', title: 'B', active: true });
+    expect(h.tabs.query).toHaveBeenCalledWith({ active: true, windowId: 2 });
+  });
+
+  it('getActiveTab without a windowId uses the last focused window', async () => {
+    const list = [
+      mkTab({ id: 1, windowId: 1, url: 'https://a.com/', active: true }),
+      mkTab({ id: 2, windowId: 2, url: 'https://b.com/', active: true }),
+    ];
+    const h = harness([], list);
+    const port = h.connect('external');
+    const active = (await h.send(port, { type: 'getActiveTab' })) as TabInfo | null;
+    expect(active?.tabId).toBe(1);
+    expect(h.tabs.query).toHaveBeenCalledWith({ active: true, lastFocusedWindow: true });
+  });
+
+  it('getActiveTab returns null when the active tab is not a web page', async () => {
+    const list = [
+      mkTab({ id: 1, windowId: 1, url: 'chrome://newtab/', active: true }),
+      mkTab({ id: 2, windowId: 1, url: 'https://a.com/', active: false }),
+    ];
+    const h = harness([], list);
+    const port = h.connect('internal');
+    expect(await h.send(port, { type: 'getActiveTab', windowId: 1 })).toBeNull();
+    expect(await h.send(port, { type: 'getActiveTab' })).toBeNull();
+  });
+
+  it('getActiveTab returns null when the window has no active tab', async () => {
+    const h = harness([], [mkTab({ id: 1, windowId: 1, url: 'https://a.com/', active: true })]);
+    const port = h.connect('internal');
+    expect(await h.send(port, { type: 'getActiveTab', windowId: 9 })).toBeNull();
+  });
+
+  it('getActiveTab falls back to pendingUrl while the first page loads', async () => {
+    const h = harness([], [mkTab({ id: 1, windowId: 1, url: '', pendingUrl: 'https://b.com/', active: true })]);
+    const port = h.connect('internal');
+    const active = (await h.send(port, { type: 'getActiveTab', windowId: 1 })) as TabInfo | null;
+    expect(active?.url).toBe('https://b.com/');
   });
 
   it('reloadTab reloads and returns the state', async () => {
@@ -423,6 +454,74 @@ describe('router: tabs', () => {
     const port = h.connect();
     await h.sendState(port, { type: 'openUrl', url: 'chrome://extensions/?id=abc' });
     expect(h.tabs.create).toHaveBeenCalledWith({ url: 'chrome://extensions/?id=abc' });
+  });
+});
+
+describe('router: active tabs on attach', () => {
+  const list = [
+    mkTab({ id: 1, windowId: 1, url: 'https://a.com/', title: 'A', active: true }),
+    mkTab({ id: 2, windowId: 1, url: 'https://b.com/', title: 'B', active: false }),
+    mkTab({ id: 3, windowId: 2, url: 'chrome://newtab/', active: true }),
+  ];
+
+  it('sends the active tab of every window to an internal port when it attaches', async () => {
+    const h = harness([], list);
+    const port = h.connect('internal');
+    await tick();
+    expect(h.tabs.query).toHaveBeenCalledWith({ active: true });
+    expect(h.events(port)).toEqual([
+      {
+        type: 'activeTabChanged',
+        windowId: 1,
+        tab: { tabId: 1, windowId: 1, url: 'https://a.com/', title: 'A', active: true },
+        reason: 'sync',
+      },
+      { type: 'activeTabChanged', windowId: 2, tab: null, reason: 'sync' },
+    ]);
+  });
+
+  it('sends nothing on attach to an external port', async () => {
+    const h = harness([], list);
+    const port = h.connect('external');
+    await tick();
+    expect(h.events(port)).toEqual([]);
+  });
+
+  it('sends nothing when the port dropped before the tabs were read', async () => {
+    const h = harness([], list);
+    const port = h.connect('internal');
+    port.drop();
+    await tick();
+    expect(port.posted).toEqual([]);
+  });
+
+  it('keeps serving the port when tabs.query fails', async () => {
+    const h = harness([mkScript()], list);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    h.tabs.query.mockRejectedValueOnce(new Error('boom'));
+    const port = h.connect('internal');
+    await tick();
+    expect(h.events(port)).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const state = await h.sendState(port, { type: 'getState' });
+    expect(state.scripts).toHaveLength(1);
+  });
+});
+
+describe('router: devReload', () => {
+  it('calls the hook and returns the state when the build provides one', async () => {
+    const devReload = vi.fn();
+    const h = harness([mkScript()], [], { devReload });
+    const port = h.connect('external');
+    const state = await h.sendState(port, { type: 'devReload' });
+    expect(devReload).toHaveBeenCalledTimes(1);
+    expect(state.scripts).toHaveLength(1);
+  });
+
+  it('is rejected when the build has no hook', async () => {
+    const h = harness();
+    const port = h.connect('external');
+    await expect(h.send(port, { type: 'devReload' })).rejects.toThrow('Not available in this build.');
   });
 });
 

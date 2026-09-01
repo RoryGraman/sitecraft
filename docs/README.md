@@ -8,6 +8,7 @@ Related documents:
 
 - Design spec: [superpowers/specs/2026-08-18-sitecraft-design.md](superpowers/specs/2026-08-18-sitecraft-design.md)
 - Implementation plan: [superpowers/plans/2026-08-31-sitecraft-implementation.md](superpowers/plans/2026-08-31-sitecraft-implementation.md)
+- Tab-aware panel note: [superpowers/plans/2026-09-01-tab-aware-panel.md](superpowers/plans/2026-09-01-tab-aware-panel.md)
 
 ## Architecture
 
@@ -32,7 +33,7 @@ Two parts talk over Chrome native messaging.
 
 **Extension** (Manifest V3, stable id `hoadedohbfjjmkajibiafgoajoicjdba`):
 
-- The side panel has two tabs, Chat and Manager, plus a first-run Onboarding checklist.
+- The side panel has two tabs, Chat and Manager, plus a first-run Onboarding checklist. A page strip under the header names the active tab of the panel's window. Chat and Manager follow that tab.
 - The background service worker owns storage, the native messaging port, `chrome.userScripts` registration, and tab reloads. It also validates every agent result before saving.
 - The content script runs at `document_start`. It injects the saved CSS for the current URL in one `<style>` element before first paint. If the page's CSP blocks that style, it reports back and the background injects the CSS with `chrome.scripting.insertCSS`. The content script also relays script errors from the page and answers snapshot and inspect requests.
 - Saved JS runs through `chrome.userScripts` in the page's MAIN world at `document_end`. One bundle is registered per URL pattern. Inside a bundle, priority 1 scripts run first and each level awaits the one before it. Every script runs in its own try/catch. A crash is reported and shown in the Manager next to the script.
@@ -111,7 +112,7 @@ The one-turn login check costs a fraction of a cent per run. It runs once per ch
 
 ### Chat
 
-1. Pick the target tab at the top of the Chat tab. It defaults to the active tab. Click the refresh button after switching tabs.
+1. The panel follows the active tab of its window. The page strip under the header shows that tab's host in bold and its title. Switch tabs or navigate and the strip, the Chat target, and the Manager list follow. When the active tab is not a web page (for example `chrome://extensions` or the Web Store) the strip says "No web page is active" and the composer is disabled until you open a site. The side panel has no tab picker. The picker exists only in the dev harness (see "Dev harness and fixture").
 2. Type a request and click **Send**. Examples: "hide the promo banner", "hide the Shorts shelf", "make the comments section wider", "add a button that scrolls to the top".
 3. A progress line shows what the agent is doing: Agent started, the first words of its reasoning, `Inspecting <selector>` when it looks at a live element, and Validating result. Click **Cancel** to abort the run.
 4. On success the extension saves the script with `trial: true`, registers the bundles, and reloads the target tab. The result card shows the name, description, kind (`css` or `js`), match pattern, and three buttons: **Keep**, **Undo**, and **Modify**.
@@ -126,11 +127,11 @@ A run has a six minute limit. Each `inspect_page` call must answer within 20 sec
 
 ### Modify
 
-Click **Modify** on a result card, or **Modify with AI** on a Manager card. A chip reading "Modifying: <name>" appears above the input. Your next request goes to the agent together with the full existing script. The agent returns an updated script with the same id, and the extension patches it in place, sets `trial` again, and reloads the tab. Click the x on the chip to go back to creating new scripts.
+Click **Modify** on a result card, or **Modify with AI** on a Manager card. A chip reading "Modifying: <name>" appears above the input. Your next request goes to the agent together with the full existing script. The agent returns an updated script with the same id, and the extension patches it in place, sets `trial` again, and reloads the tab. Click the x on the chip to go back to creating new scripts. The chip also clears on its own when you move to a page that the script's match pattern does not cover.
 
 ### Manager
 
-Scripts are grouped by host, taken from each script's match pattern. Each card offers:
+The Manager opens in the **This page** scope. It lists only the scripts whose match pattern matches the active tab's URL, sorted by priority and then by name. The Manager tab label shows that count. Switch to **All sites** to see every script grouped by host, taken from each script's match pattern. When no web page is active the page scope says so; switch to All sites to see every script. Export and Import stay global in both scopes. Each card offers:
 
 - an enabled toggle,
 - a priority select from 1 to 5 (1 runs first; for CSS, 1 is written first so higher numbers win ties),
@@ -169,7 +170,11 @@ pnpm build:harness
 
 Only this build (Vite mode `harness`, or `SITECRAFT_HARNESS=1`) adds `externally_connectable.matches` for `http://localhost/*` and `http://127.0.0.1/*` (any port) and names the extension "Sitecraft (harness build)". A normal `pnpm build` has no `externally_connectable` key, so no web page can talk to the extension. Any page served from localhost can drive a harness build, including creating scripts, so do not use a harness build for daily browsing.
 
-How the harness connects: the harness page calls `chrome.runtime.connect('hoadedohbfjjmkajibiafgoajoicjdba', { name: 'sitecraft-sidebar' })` and the background accepts the port in `onConnectExternal` after checking the sender origin. The footer shows "Harness" in this mode. Requirements: the extension must be loaded with the stable id, and the page must be opened from `localhost` or `127.0.0.1`. Because the harness is itself a tab, the default target tab is the most recently active `http` or `https` tab that is not the harness. Open the fixture in another tab first, then use the tab picker if needed.
+How the harness connects: the harness page calls `chrome.runtime.connect('hoadedohbfjjmkajibiafgoajoicjdba', { name: 'sitecraft-sidebar' })` and the background accepts the port in `onConnectExternal` after checking the sender origin. The footer shows "Harness" in this mode. Requirements: the extension must be loaded with the stable id, and the page must be opened from `localhost` or `127.0.0.1`.
+
+Target tab in the harness: the harness is itself a tab, so it cannot follow its own window the way the side panel does. Its Chat shows a tab picker plus a **Follow active tab** checkbox, on by default. While the checkbox is on, switching to any web tab in any window makes that tab the target. A navigation or title change on the active tab of another window does not move it; only a tab switch does. The harness page itself is never the target. Picking a tab by hand turns the checkbox off; tick it again to follow once more. **Refresh** reloads the tab list and keeps the current pick when it still exists. The first target is the most recently active `http` or `https` tab that is not the harness, so open the fixture in another tab first.
+
+Reloading the extension from the harness: the footer has a **Reload extension** link. It sends the `devReload` request and the background calls `chrome.runtime.reload()`. Only harness builds wire this request, by either path above (`extension/buildFlags.ts` holds the rule). A production build answers "Not available in this build.", which the footer shows. The port drops while the extension restarts and the harness page reconnects on its own.
 
 The fixture page (`fixtures/index.html`) has a strict CSP (`default-src 'self'; script-src 'self'; style-src 'self'`). Inline styles and inline scripts from the page are blocked, which exercises both the `insertCSS` fallback and the `chrome.userScripts` path. Known elements:
 
@@ -189,7 +194,7 @@ Run this after `pnpm build` with the extension loaded, Allow User Scripts on, th
 
 1. Open `http://localhost:4174/`. Confirm the promo banner, the Shorts shelf, and after half a second the late widget are visible.
 2. Open `http://localhost:4173/harness/index.html` in a second tab, or open the real side panel on the fixture tab. Confirm all three onboarding rows are green and the main UI appears. First run: click Continue.
-3. In Chat, make sure the target tab is the fixture. Send "Hide the promo banner".
+3. In Chat, check that the page strip shows `localhost:4174`. In the real side panel, click the fixture tab. In the harness, leave Follow active tab on, click the fixture tab once, and come back; the target stays on the fixture. Or pick the fixture in the tab picker. Send "Hide the promo banner".
 4. Watch the progress line, then the result card. Confirm the fixture tab reloaded and the banner is gone. Confirm the card shows kind `css` (expected for a hide request) and a pattern such as `http://localhost:4174/*`.
 5. Reload the fixture tab by hand. The banner must stay hidden (persistence).
 6. Click **Undo**. The tab reloads and the banner is visible again. Open Manager: the script is listed under `localhost:4174`, disabled, still with the Trial badge.
@@ -230,6 +235,7 @@ Other symptoms:
 | A run ends with a validation error naming `urlPattern`, `code`, or another field. | The agent returned a malformed script. Nothing was saved. Send the request again, with more detail if needed. |
 | The result card looks right but the page did not change. | Check row 1 (user scripts). Check the Manager for a Last error. For CSS on a strict-CSP site the content script asks the background to fall back to `insertCSS`; reload the tab once more. |
 | The harness page shows "Extension not reachable". | The extension is not loaded, has a different id, or the page was not opened from `localhost` or `127.0.0.1`. Reload the extension and the page. |
+| The page strip says "No web page is active" while a site is open. | The panel follows the active tab of its own window. Click the site's tab once. Tabs such as `chrome://` pages and the Web Store are never targets. |
 | Scripts disappeared after an extension update. | Storage survives updates, but `chrome.userScripts` registrations are cleared. The background re-registers on `onInstalled`. Reload the extension once if a page still misses its scripts. |
 
 ## Configuration and logs

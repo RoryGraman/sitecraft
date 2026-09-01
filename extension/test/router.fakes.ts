@@ -23,6 +23,21 @@ export class FakeEvent<T> {
   }
 }
 
+/** Like FakeEvent, for listeners that take several arguments (tabs.onUpdated). */
+export class FakeArgsEvent<A extends unknown[]> {
+  readonly listeners = new Set<(...args: A) => void>();
+  addListener = (l: (...args: A) => void): void => {
+    this.listeners.add(l);
+  };
+  removeListener = (l: (...args: A) => void): void => {
+    this.listeners.delete(l);
+  };
+  hasListener = (l: (...args: A) => void): boolean => this.listeners.has(l);
+  emit(...args: A): void {
+    for (const l of [...this.listeners]) l(...args);
+  }
+}
+
 type Changes = Record<string, chrome.storage.StorageChange>;
 type ChangeListener = (changes: Changes, areaName: string) => void;
 
@@ -190,6 +205,28 @@ export function fakeNative(initial: CompanionStatus = { state: 'unknown' }): Fak
     },
   };
   return native;
+}
+
+/** A chrome.tabs.Tab with every required field filled in. */
+export function mkTab(overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab {
+  return {
+    id: 1,
+    windowId: 1,
+    index: 0,
+    url: 'https://a.com/',
+    title: 'A',
+    active: false,
+    pinned: false,
+    highlighted: false,
+    incognito: false,
+    selected: false,
+    discarded: false,
+    autoDiscardable: true,
+    groupId: -1,
+    frozen: false,
+    lastAccessed: 0,
+    ...overrides,
+  } as chrome.tabs.Tab;
 }
 
 /** Resolves after all currently queued microtasks and one macrotask. */

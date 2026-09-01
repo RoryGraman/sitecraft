@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { SidebarRequest, SidebarState, SiteScript, TabInfo } from '@sitecraft/shared';
+import type { SidebarRequest, SidebarState, SiteScript } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
 import { TabPicker } from './components/TabPicker';
+import type { PageState } from './usePage';
 import { errorMessage, mutate } from './util';
 
 export interface ChatProps {
   bridge: Bridge;
   state: SidebarState;
+  page: PageState;
   modifyTarget: SiteScript | null;
   onModify(script: SiteScript): void;
   onClearModify(): void;
@@ -27,10 +29,7 @@ type RunRequest = Extract<SidebarRequest, { type: 'runRequest' }>;
 const CANCEL_GRACE_MS = 5000;
 
 export function Chat(props: ChatProps) {
-  const { bridge, state, modifyTarget, onModify, onClearModify, onState } = props;
-  const [tabs, setTabs] = useState<TabInfo[]>([]);
-  const [tabId, setTabId] = useState<number | null>(null);
-  const [tabsLoading, setTabsLoading] = useState(false);
+  const { bridge, state, page, modifyTarget, onModify, onClearModify, onState } = props;
   const [text, setText] = useState('');
   const [items, setItems] = useState<ThreadItem[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
@@ -50,6 +49,10 @@ export function Chat(props: ChatProps) {
   modifyRef.current = modifyTarget;
   clearModifyRef.current = onClearModify;
 
+  const tabId = page.tab?.tabId ?? null;
+  const hasPage = tabId !== null;
+  const noPage = page.ready && !hasPage;
+
   const push = useCallback((item: NewItem) => {
     counter.current += 1;
     const next: ThreadItem = { ...item, id: counter.current };
@@ -60,27 +63,6 @@ export function Chat(props: ChatProps) {
     runIdRef.current = id;
     setRunId(id);
   }, []);
-
-  const loadTabs = useCallback(async () => {
-    setTabsLoading(true);
-    try {
-      const [list, def] = await Promise.all([bridge.request({ type: 'listTabs' }), bridge.request({ type: 'getDefaultTab' })]);
-      setTabs(list);
-      setTabId((current) => {
-        if (current !== null && list.some((t) => t.tabId === current)) return current;
-        if (def && list.some((t) => t.tabId === def.tabId)) return def.tabId;
-        return list[0]?.tabId ?? null;
-      });
-    } catch (e) {
-      push({ kind: 'error', text: errorMessage(e) });
-    } finally {
-      setTabsLoading(false);
-    }
-  }, [bridge, push]);
-
-  useEffect(() => {
-    void loadTabs();
-  }, [loadTabs]);
 
   useEffect(
     () =>
@@ -129,7 +111,7 @@ export function Chat(props: ChatProps) {
     const request = text.trim();
     if (!request || sending || runIdRef.current) return;
     if (tabId === null) {
-      push({ kind: 'error', text: 'Pick a tab first.' });
+      push({ kind: 'error', text: 'No web page is active.' });
       return;
     }
     setSending(true);
@@ -181,12 +163,18 @@ export function Chat(props: ChatProps) {
 
   return (
     <div className="chat">
-      <TabPicker tabs={tabs} selectedTabId={tabId} onSelect={setTabId} onRefresh={() => void loadTabs()} loading={tabsLoading} />
+      {bridge.mode === 'external' && (
+        <>
+          <TabPicker tabs={page.tabs} selectedTabId={tabId} onSelect={page.select} onRefresh={page.refresh} loading={page.loading} />
+          <label className="follow-row">
+            <input type="checkbox" data-testid="follow-active" checked={page.follow} onChange={(e) => page.setFollow(e.target.checked)} />
+            Follow active tab
+          </label>
+        </>
+      )}
 
       <div className="thread" ref={threadRef} data-testid="chat-thread">
-        {items.length === 0 && (
-          <p className="muted empty">Describe a change for the picked tab. Example: "Hide the promo banner".</p>
-        )}
+        {items.length === 0 && <p className="muted empty">Describe a change for this page. Example: "Hide the promo banner".</p>}
         {items.map((item) => {
           switch (item.kind) {
             case 'user':
@@ -243,13 +231,19 @@ export function Chat(props: ChatProps) {
           data-testid="chat-input"
           value={text}
           rows={3}
-          disabled={running}
+          disabled={running || !hasPage}
           placeholder={modifyTarget ? 'Describe the change to this script' : 'What should change on this site?'}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
         />
         <div className="row">
-          <button type="button" className="btn btn-primary" data-testid="chat-send" disabled={running || sending} onClick={() => void send()}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-testid="chat-send"
+            disabled={running || sending || !hasPage}
+            onClick={() => void send()}
+          >
             Send
           </button>
           {running && (
@@ -257,7 +251,13 @@ export function Chat(props: ChatProps) {
               Cancel
             </button>
           )}
-          <span className="muted hint">Enter sends. Shift+Enter adds a line.</span>
+          {noPage ? (
+            <span className="muted hint" data-testid="no-page-hint">
+              Open a website in this window to make changes.
+            </span>
+          ) : (
+            <span className="muted hint">Enter sends. Shift+Enter adds a line.</span>
+          )}
         </div>
       </div>
     </div>

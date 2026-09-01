@@ -103,6 +103,27 @@ input {
   border-color: var(--border);
 }
 
+.page-strip {
+  flex: none;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+  font-size: 12px;
+  line-height: 18px;
+  min-height: 27px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-host {
+  font-weight: 600;
+}
+
+.page-title {
+  color: var(--muted);
+}
+
 .main {
   flex: 1;
   min-height: 0;
@@ -304,6 +325,21 @@ input {
   background: var(--bg);
 }
 
+.follow-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.follow-row input {
+  margin: 0;
+}
+
 .thread {
   flex: 1;
   min-height: 0;
@@ -404,6 +440,17 @@ textarea.code {
 
 .toolbar {
   margin-bottom: 8px;
+}
+
+/* The scope switch reuses .tab and .tab.active from the header. */
+.scope {
+  display: flex;
+  gap: 2px;
+}
+
+.scope .tab {
+  padding: 2px 8px;
+  font-size: 12px;
 }
 
 .panel {

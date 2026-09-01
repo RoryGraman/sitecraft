@@ -38,6 +38,19 @@ export type SidebarRequest =
   | { type: 'listTabs' }
   | { type: 'getDefaultTab' }
   | {
+      /**
+       * The active web tab of one window, or null when that tab is not a web
+       * page (chrome://, the Web Store, and so on). Without windowId the last
+       * focused window is used. The side panel passes its own window id.
+       */
+      type: 'getActiveTab';
+      windowId?: number;
+    }
+  | {
+      /** Harness builds only: chrome.runtime.reload(). Production builds reject it. */
+      type: 'devReload';
+    }
+  | {
       type: 'runRequest';
       tabId: number;
       text: string;
@@ -84,7 +97,7 @@ export type SidebarResponseFor<R extends SidebarRequest> = R extends { type: 'ge
   ? SidebarState
   : R extends { type: 'listTabs' }
     ? TabInfo[]
-    : R extends { type: 'getDefaultTab' }
+    : R extends { type: 'getDefaultTab' | 'getActiveTab' }
       ? TabInfo | null
       : R extends { type: 'runRequest' }
         ? RunStarted
@@ -109,12 +122,34 @@ export type SidebarReplyEnvelope =
   | { requestId: string; ok: true; result: unknown }
   | { requestId: string; ok: false; error: string };
 
+/**
+ * Why an activeTabChanged event was sent.
+ * - 'activated': the user switched tabs (tabs.onActivated).
+ * - 'updated': the active tab's URL, title, or load status changed (tabs.onUpdated).
+ * - 'sync': a snapshot for a side panel port that has just attached, one per window.
+ * The harness moves its target only on 'activated'.
+ */
+export type ActiveTabReason = 'activated' | 'updated' | 'sync';
+
 /** Unsolicited events, background -> sidebar. No requestId. */
 export type SidebarEvent =
   | { type: 'stateChanged'; state: SidebarState }
   | { type: 'runProgress'; runId: string; status: string }
   | { type: 'runDone'; runId: string; outcome: RunOutcome }
-  | { type: 'companionStatus'; status: CompanionStatus };
+  | { type: 'companionStatus'; status: CompanionStatus }
+  | {
+      /**
+       * The active tab of a window changed, or its URL or title changed.
+       * `tab` is null when the active tab is not a web page. Sent to every
+       * port; each panel keeps only events for its own window. Also sent to a
+       * side panel port when it attaches (reason 'sync'), so a reconnect after
+       * a service worker restart brings the panel up to date.
+       */
+      type: 'activeTabChanged';
+      windowId: number;
+      tab: TabInfo | null;
+      reason: ActiveTabReason;
+    };
 
 export type SidebarEnvelope = SidebarReplyEnvelope | { event: SidebarEvent };
 

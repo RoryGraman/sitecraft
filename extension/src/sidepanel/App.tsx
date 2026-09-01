@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CompanionStatus, OnboardingStatus, SidebarState, SiteScript } from '@sitecraft/shared';
+import { matchesPattern, type CompanionStatus, type OnboardingStatus, type SidebarState, type SiteScript } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
 import { Chat } from './Chat';
 import { Manager } from './Manager';
 import { Onboarding, allChecksPass, companionLabel } from './Onboarding';
-import { errorMessage } from './util';
+import { usePage } from './usePage';
+import { errorMessage, hostOf, truncate } from './util';
+
+/** Longest page title shown in the strip. */
+const STRIP_TITLE_MAX = 60;
+
+/** The label in the page strip for a URL: its host, or a fixed label for file URLs. */
+export function hostLabel(url: string): string {
+  return hostOf(url) || 'Local file';
+}
 
 export type View = 'chat' | 'manager';
 
@@ -36,6 +45,16 @@ export function App({ bridge }: AppProps) {
   const [setupOpen, setSetupOpen] = useState(false);
   const [modifyTarget, setModifyTarget] = useState<SiteScript | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [footerError, setFooterError] = useState<string | null>(null);
+  const page = usePage(bridge);
+
+  // When the page changes, drop a Modify chip whose script no longer matches.
+  // Only a page change triggers this. Picking Modify on any script keeps it.
+  const pageUrl = page.tab?.url ?? null;
+  useEffect(() => {
+    if (pageUrl === null) return;
+    setModifyTarget((t) => (t && !matchesPattern(t.urlPattern, pageUrl) ? null : t));
+  }, [pageUrl]);
 
   useEffect(() => {
     let alive = true;
@@ -101,6 +120,12 @@ export function App({ bridge }: AppProps) {
   }, []);
   const clearModify = useCallback(() => setModifyTarget(null), []);
   const closeSetup = useCallback(() => setSetupOpen(false), []);
+  // Retry loads the state again and asks for the page again. Both can have
+  // failed on the same lost connection.
+  const retry = () => {
+    setAttempt((n) => n + 1);
+    page.refresh();
+  };
 
   if (!state) {
     return (
@@ -112,7 +137,7 @@ export function App({ bridge }: AppProps) {
           {loadError ? (
             <div>
               <p className="error-text">{loadError}</p>
-              <button type="button" className="btn" onClick={() => setAttempt((n) => n + 1)}>
+              <button type="button" className="btn" onClick={retry}>
                 Retry
               </button>
             </div>
@@ -131,6 +156,17 @@ export function App({ bridge }: AppProps) {
   // see the app at once instead of a blocking "Checking setup." screen.
   const optimistic = onboarding === null && state.settings.onboardingDone;
   const showOnboarding = setupOpen || (!optimistic && !setupComplete);
+  const pageCount = pageUrl === null ? 0 : state.scripts.filter((s) => matchesPattern(s.urlPattern, pageUrl)).length;
+  const devReload = () => {
+    setFooterError(null);
+    // The port drops while the extension reloads, so the reply may never
+    // arrive. That disconnect is expected and the bridge reconnects on its
+    // own. Any other answer, such as a build without the hook, is shown.
+    bridge.request({ type: 'devReload' }).catch((e: unknown) => {
+      const message = errorMessage(e);
+      if (!message.startsWith('Disconnected')) setFooterError(message);
+    });
+  };
 
   return (
     <div className="app" data-mode={bridge.mode}>
@@ -152,11 +188,24 @@ export function App({ bridge }: AppProps) {
               data-testid="tab-manager"
               onClick={() => setView('manager')}
             >
-              Manager{state.scripts.length > 0 ? ` (${state.scripts.length})` : ''}
+              Manager{pageCount > 0 ? ` (${pageCount})` : ''}
             </button>
           </nav>
         )}
       </header>
+
+      {!showOnboarding && (
+        <div className="page-strip" data-testid="page-strip" title={page.tab ? page.tab.title : undefined}>
+          {page.tab ? (
+            <>
+              <span className="page-host">{hostLabel(page.tab.url)}</span>{' '}
+              <span className="page-title">{truncate(page.tab.title.trim() || page.tab.url, STRIP_TITLE_MAX)}</span>
+            </>
+          ) : page.ready ? (
+            <span className="muted">No web page is active. Open a site in this window.</span>
+          ) : null}
+        </div>
+      )}
 
       <main className="main">
         {showOnboarding &&
@@ -180,6 +229,7 @@ export function App({ bridge }: AppProps) {
           <Chat
             bridge={bridge}
             state={state}
+            page={page}
             modifyTarget={modifyTarget}
             onModify={handleModify}
             onClearModify={clearModify}
@@ -187,7 +237,7 @@ export function App({ bridge }: AppProps) {
           />
         </div>
         <div hidden={showOnboarding || view !== 'manager'} className="view">
-          <Manager bridge={bridge} state={state} onModify={handleModify} onState={setState} />
+          <Manager bridge={bridge} state={state} page={page.tab} onModify={handleModify} onState={setState} />
         </div>
       </main>
 
@@ -195,6 +245,16 @@ export function App({ bridge }: AppProps) {
         <span className={dotClass(companion)} aria-hidden="true" />
         <span title={companion.detail ?? ''}>Companion: {companionLabel(companion)}</span>
         {bridge.mode === 'external' && <span className="muted">Harness</span>}
+        {bridge.mode === 'external' && (
+          <button type="button" className="link" data-testid="dev-reload" onClick={devReload}>
+            Reload extension
+          </button>
+        )}
+        {footerError && (
+          <span className="error-text" data-testid="footer-error">
+            {footerError}
+          </span>
+        )}
         <span className="spacer" />
         <button type="button" className="link" data-testid="footer-setup" onClick={() => setSetupOpen(true)}>
           Setup

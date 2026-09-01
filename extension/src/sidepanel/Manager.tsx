@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import type { ImportResult, SidebarState, SiteScript } from '@sitecraft/shared';
+import { matchesPattern, type ImportResult, type SidebarState, type SiteScript, type TabInfo } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
-import { ScriptCard } from './components/ScriptCard';
-import { errorMessage, mutate } from './util';
+import { CARD_UI_CLOSED, ScriptCard, type CardUi } from './components/ScriptCard';
+import { errorMessage, hostOf, mutate } from './util';
 
 export interface ManagerProps {
   bridge: Bridge;
   state: SidebarState;
+  /** The page the panel targets. Null when no web page is active. */
+  page: TabInfo | null;
   onModify(script: SiteScript): void;
   onState(state: SidebarState): void;
 }
@@ -16,6 +18,9 @@ export interface ScriptGroup {
   scripts: SiteScript[];
 }
 
+/** 'page' lists scripts that match the page URL. 'all' lists every script by host. */
+export type Scope = 'page' | 'all';
+
 /** Host label for a match pattern. Pure string work, no pattern validation. */
 export function hostFromPattern(pattern: string): string {
   if (pattern === '<all_urls>') return 'All sites';
@@ -23,6 +28,10 @@ export function hostFromPattern(pattern: string): string {
   if (!m) return pattern;
   const host = m[1] ?? '';
   return host === '' ? 'Local files' : host;
+}
+
+function byPriorityThenName(a: SiteScript, b: SiteScript): number {
+  return a.priority - b.priority || a.name.localeCompare(b.name);
 }
 
 export function groupByHost(scripts: SiteScript[]): ScriptGroup[] {
@@ -36,9 +45,15 @@ export function groupByHost(scripts: SiteScript[]): ScriptGroup[] {
   return [...map.entries()]
     .map(([host, list]) => ({
       host,
-      scripts: [...list].sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name)),
+      scripts: [...list].sort(byPriorityThenName),
     }))
     .sort((a, b) => a.host.localeCompare(b.host));
+}
+
+/** Scripts whose pattern matches the page URL, sorted by priority then name. */
+export function scriptsForPage(scripts: SiteScript[], page: TabInfo | null): SiteScript[] {
+  if (!page) return [];
+  return scripts.filter((s) => matchesPattern(s.urlPattern, page.url)).sort(byPriorityThenName);
 }
 
 type Panel = 'none' | 'export' | 'import';
@@ -47,7 +62,8 @@ function exportFileName(): string {
   return `sitecraft-scripts-${new Date().toISOString().slice(0, 10)}.json`;
 }
 
-export function Manager({ bridge, state, onModify, onState }: ManagerProps) {
+export function Manager({ bridge, state, page, onModify, onState }: ManagerProps) {
+  const [scope, setScope] = useState<Scope>('page');
   const [panel, setPanel] = useState<Panel>('none');
   const [panelError, setPanelError] = useState<string | null>(null);
   const [exportJson, setExportJson] = useState<string | null>(null);
@@ -56,7 +72,14 @@ export function Manager({ bridge, state, onModify, onState }: ManagerProps) {
   const [importText, setImportText] = useState('');
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
+  // Card edit state lives here, keyed by script id, so an open editor and its
+  // draft survive a page change or a scope switch that remounts the card.
+  const [cardUi, setCardUi] = useState<Record<string, CardUi>>({});
   const exportRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function patchCardUi(id: string, patch: Partial<CardUi>): void {
+    setCardUi((prev) => ({ ...prev, [id]: { ...(prev[id] ?? CARD_UI_CLOSED), ...patch } }));
+  }
 
   useEffect(() => {
     if (exportJson === null || typeof URL.createObjectURL !== 'function') {
@@ -124,13 +147,88 @@ export function Manager({ bridge, state, onModify, onState }: ManagerProps) {
     }
   }
 
-  const groups = groupByHost(state.scripts);
+  const pageScripts = scriptsForPage(state.scripts, page);
+  const shown = scope === 'page' ? pageScripts : state.scripts;
+  const groups = scope === 'all' ? groupByHost(state.scripts) : [];
+  const pageHost = page ? hostOf(page.url) || 'this page' : '';
+
+  const card = (s: SiteScript) => (
+    <ScriptCard
+      key={s.id}
+      script={s}
+      error={state.errors[s.id]}
+      ui={cardUi[s.id] ?? CARD_UI_CLOSED}
+      onUi={(patch) => patchCardUi(s.id, patch)}
+      onToggle={(enabled) => mutate(bridge, { type: 'toggleScript', id: s.id, enabled }, onState)}
+      onPriority={(priority) => mutate(bridge, { type: 'setPriority', id: s.id, priority }, onState)}
+      onSaveCode={(code) => mutate(bridge, { type: 'updateCode', id: s.id, code }, onState)}
+      onModify={() => onModify(s)}
+      onDelete={() => mutate(bridge, { type: 'deleteScript', id: s.id }, onState)}
+      onClearError={() => mutate(bridge, { type: 'clearError', id: s.id }, onState)}
+    />
+  );
+
+  let list;
+  if (scope === 'page') {
+    if (!page) {
+      list = (
+        <p className="muted empty" data-testid="manager-empty">
+          No web page is active. Switch to All sites to see every script.
+        </p>
+      );
+    } else if (pageScripts.length === 0) {
+      list = (
+        <p className="muted empty" data-testid="manager-empty">
+          No scripts for {pageHost} yet. Ask for a change in Chat.
+        </p>
+      );
+    } else {
+      list = (
+        <div className="group" data-testid="page-scripts">
+          {pageScripts.map(card)}
+        </div>
+      );
+    }
+  } else if (groups.length === 0) {
+    list = (
+      <p className="muted empty" data-testid="manager-empty">
+        No scripts yet. Ask for a change in Chat.
+      </p>
+    );
+  } else {
+    list = groups.map((group) => (
+      <section key={group.host} className="group" data-testid="script-group" data-host={group.host}>
+        <h3 className="group-title">{group.host}</h3>
+        {group.scripts.map(card)}
+      </section>
+    ));
+  }
 
   return (
     <div className="manager">
       <div className="row toolbar">
-        <span className="muted">
-          {state.scripts.length} {state.scripts.length === 1 ? 'script' : 'scripts'}
+        <div className="scope" role="group" aria-label="Scope">
+          <button
+            type="button"
+            className={scope === 'page' ? 'tab active' : 'tab'}
+            data-testid="scope-page"
+            aria-pressed={scope === 'page'}
+            onClick={() => setScope('page')}
+          >
+            This page
+          </button>
+          <button
+            type="button"
+            className={scope === 'all' ? 'tab active' : 'tab'}
+            data-testid="scope-all"
+            aria-pressed={scope === 'all'}
+            onClick={() => setScope('all')}
+          >
+            All sites
+          </button>
+        </div>
+        <span className="muted" data-testid="manager-count">
+          {shown.length} {shown.length === 1 ? 'script' : 'scripts'}
         </span>
         <span className="spacer" />
         <button type="button" className="btn btn-small" data-testid="export-button" onClick={() => void doExport()}>
@@ -232,28 +330,7 @@ export function Manager({ bridge, state, onModify, onState }: ManagerProps) {
 
       {panelError && <p className="error-text">{panelError}</p>}
 
-      {groups.length === 0 ? (
-        <p className="muted empty">No scripts yet. Ask for a change in Chat.</p>
-      ) : (
-        groups.map((group) => (
-          <section key={group.host} className="group" data-testid="script-group" data-host={group.host}>
-            <h3 className="group-title">{group.host}</h3>
-            {group.scripts.map((s) => (
-              <ScriptCard
-                key={s.id}
-                script={s}
-                error={state.errors[s.id]}
-                onToggle={(enabled) => mutate(bridge, { type: 'toggleScript', id: s.id, enabled }, onState)}
-                onPriority={(priority) => mutate(bridge, { type: 'setPriority', id: s.id, priority }, onState)}
-                onSaveCode={(code) => mutate(bridge, { type: 'updateCode', id: s.id, code }, onState)}
-                onModify={() => onModify(s)}
-                onDelete={() => mutate(bridge, { type: 'deleteScript', id: s.id }, onState)}
-                onClearError={() => mutate(bridge, { type: 'clearError', id: s.id }, onState)}
-              />
-            ))}
-          </section>
-        ))
-      )}
+      {list}
     </div>
   );
 }

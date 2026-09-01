@@ -5,7 +5,8 @@
  * Requests arrive as { requestId, request } envelopes and are answered with
  * { requestId, ok, result | error }. Unsolicited events ({ event }) are
  * broadcast to every port: stateChanged on every store write, companionStatus
- * on native client status changes, and run events from the run manager.
+ * on native client status changes, run events from the run manager, and
+ * activeTabChanged from the tab watcher (see tabs.ts and index.ts).
  */
 
 import { SCHEMA_VERSION, parseExportFile, validateSiteScript } from '@sitecraft/shared';
@@ -27,6 +28,7 @@ import { nowIso } from '../lib/ids';
 import type { NativeClient } from './native';
 import { syncUserScripts, type RegisterAllFn, type RunManager, type RunStartRequest } from './runs';
 import type { StateStore } from './state';
+import { isWebTab, protocolOf, toActiveTab, toTabInfo } from './tabs';
 
 export type PortKind = 'internal' | 'external';
 
@@ -47,6 +49,8 @@ export interface RouterDeps {
   tabs?: TabsApi;
   /** Clock for the login check cache. Defaults to Date.now. */
   now?(): number;
+  /** Reloads the extension. Harness builds only; production leaves it out. */
+  devReload?: () => void;
 }
 
 export interface RequestContext {
@@ -94,17 +98,8 @@ function defaultTabs(): TabsApi {
 }
 
 // ---------------------------------------------------------------------------
-// tabs
+// tabs (the web-tab rule itself lives in tabs.ts)
 // ---------------------------------------------------------------------------
-
-function protocolOf(url: string | undefined): string | null {
-  if (typeof url !== 'string' || url === '') return null;
-  try {
-    return new URL(url).protocol;
-  } catch {
-    return null;
-  }
-}
 
 function originOf(url: string | undefined): string | null {
   if (typeof url !== 'string' || url === '') return null;
@@ -115,20 +110,9 @@ function originOf(url: string | undefined): string | null {
   }
 }
 
-/** A tab Sitecraft can work on: has an id and an http, https or file URL. */
-function isWebTab(tab: chrome.tabs.Tab): tab is chrome.tabs.Tab & { id: number; url: string } {
-  if (typeof tab.id !== 'number') return false;
-  const protocol = protocolOf(tab.url);
-  return protocol === 'http:' || protocol === 'https:' || protocol === 'file:';
-}
-
 function isHttpTab(tab: chrome.tabs.Tab): boolean {
   const protocol = protocolOf(tab.url);
   return protocol === 'http:' || protocol === 'https:';
-}
-
-function toTabInfo(tab: chrome.tabs.Tab & { id: number; url: string }): TabInfo {
-  return { tabId: tab.id, windowId: tab.windowId, url: tab.url, title: tab.title ?? '', active: tab.active };
 }
 
 /** Most recently active first. Falls back to the active flag when lastAccessed is missing. */
@@ -230,6 +214,14 @@ export function createRouter(deps: RouterDeps): Router {
     return best ? toTabInfo(best) : null;
   }
 
+  /** The active tab of one window, or of the last focused window. Null when it is not a web page. */
+  async function getActiveTab(windowId: number | undefined): Promise<TabInfo | null> {
+    const query: chrome.tabs.QueryInfo =
+      typeof windowId === 'number' ? { active: true, windowId } : { active: true, lastFocusedWindow: true };
+    const [activeTab] = await tabs.query(query);
+    return activeTab ? toActiveTab(activeTab) : null;
+  }
+
   // ----- import / export -----
 
   async function exportScripts(): Promise<string> {
@@ -312,6 +304,13 @@ export function createRouter(deps: RouterDeps): Router {
         return listTabs();
       case 'getDefaultTab':
         return getDefaultTab(ctx);
+      case 'getActiveTab':
+        return getActiveTab(req.windowId);
+      case 'devReload':
+        // Harness builds only. The worker restarts and the harness page reconnects.
+        if (!deps.devReload) throw new Error('Not available in this build.');
+        deps.devReload();
+        return sidebarState();
       case 'runRequest': {
         const start: RunStartRequest = { tabId: req.tabId, text: req.text };
         if (req.targetScriptId !== undefined) start.targetScriptId = req.targetScriptId;
@@ -413,6 +412,25 @@ export function createRouter(deps: RouterDeps): Router {
     for (const port of [...ports]) post(port, { event: ev });
   }
 
+  /**
+   * Sends the active tab of every window to a port that has just attached.
+   * A side panel that reconnects after a service worker restart missed any
+   * activeTabChanged broadcast in between. This snapshot brings it up to date.
+   * Nothing is sent when the port dropped before the tabs were read.
+   */
+  async function sendActiveTabs(port: chrome.runtime.Port): Promise<void> {
+    let list: chrome.tabs.Tab[];
+    try {
+      list = await tabs.query({ active: true });
+    } catch (e) {
+      console.warn('Sitecraft: could not send the active tabs', e);
+      return;
+    }
+    for (const t of list) {
+      post(port, { event: { type: 'activeTabChanged', windowId: t.windowId, tab: toActiveTab(t), reason: 'sync' } });
+    }
+  }
+
   function attachPort(port: chrome.runtime.Port, kind: PortKind = 'internal'): void {
     const ctx: RequestContext = { kind };
     if (port.sender?.origin !== undefined) ctx.origin = port.sender.origin;
@@ -424,6 +442,8 @@ export function createRouter(deps: RouterDeps): Router {
     port.onDisconnect.addListener(() => {
       ports.delete(port);
     });
+    // Only the side panel follows a window. The harness picks its own target.
+    if (kind === 'internal') void sendActiveTabs(port);
   }
 
   const unsubscribeStore = store.onChange((state) => {

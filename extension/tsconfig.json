@@ -6,5 +6,5 @@
     "types": ["chrome", "vitest/globals"],
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "harness", "test", "vite.config.ts", "manifest.config.ts", "vitest.config.ts"]
+  "include": ["src", "harness", "test", "buildFlags.ts", "vite.config.ts", "manifest.config.ts", "vitest.config.ts"]
 }

@@ -180,6 +180,17 @@ describe('runAgent', () => {
     expect(out).toEqual(GOOD);
   });
 
+  it('clamps an over-long description instead of failing the run', async () => {
+    const long = 'Hides the promo banner. '.repeat(20).trim();
+    sdk.messages = [init, success({ structured_output: { ...GOOD, description: long } })];
+    const warn = vi.fn();
+    const logger = { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn(), file: null };
+    const out = await runAgent(PAYLOAD, makeHooks(), { cwd: '/tmp', logger });
+    expect(out.description.length).toBeLessThanOrEqual(200);
+    expect(out.description.endsWith('.')).toBe(true);
+    expect(warn).toHaveBeenCalledWith('Agent output clamped', expect.objectContaining({ field: 'description', from: long.length }));
+  });
+
   it('throws when validation fails and names the field', async () => {
     sdk.messages = [init, success({ structured_output: { ...GOOD, urlPattern: 'nope' } })];
     await expect(runAgent(PAYLOAD, makeHooks(), { cwd: '/tmp' })).rejects.toThrow(/urlPattern/);
@@ -396,6 +407,7 @@ describe('systemPrompt', () => {
     expect(p).toMatch(/match pattern/i);
     expect(p).toMatch(/idempotent/i);
     expect(p).toMatch(/60 characters/);
+    expect(p).toMatch(/200 characters/);
     expect(p).not.toContain('\u2014');
   });
 

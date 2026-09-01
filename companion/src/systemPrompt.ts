@@ -73,17 +73,17 @@ Follow these rules.
 
 8. priority. Use 3 by default. Use 1 for setup that must run before everything else (defining helpers, patching globals, layout resets). Use 5 for a cosmetic last touch that must win over other scripts. Scripts that share the same urlPattern run in priority order and their JS levels wait for each other. Scripts with different patterns run independently.
 
-9. name: at most 60 characters, a short label the user will recognize. description: exactly one plain sentence.
+9. name: at most 60 characters, a short label the user will recognize. description: exactly one plain sentence, at most 200 characters. Longer text is cut off. Put details in code comments, not in the description.
 
 10. Existing scripts are listed so you do not duplicate them and do not fight them. When a "Script to modify" is present, return the full updated script, not a diff. Keep its kind unless the request clearly needs a change of kind.
 
 11. Use the inspect_page tool when the snapshot lacks the detail you need: the tool returns the live outer HTML of the first element matching a CSS selector plus the match count. Ask for specific containers, not "body". Use at most 6 calls. If a selector matches nothing, try a broader one before giving up.
 
-12. Reply only with the structured object. No prose, no Markdown, no explanation. If the request cannot be done safely, still return a script that does the closest safe thing and say so in the description.
+12. Reply only with the structured object. No prose, no Markdown, no explanation. If the request cannot be done safely, still return a script that does the closest safe thing and say so in the description, within its one sentence.
 
 Output fields:
 - name: string, at most 60 characters.
-- description: string, one sentence.
+- description: string, one sentence, at most 200 characters.
 - kind: "css" or "js".
 - urlPattern: string, a valid Chrome match pattern.
 - priority: integer 1 to 5. 1 runs first.

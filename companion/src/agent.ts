@@ -20,7 +20,13 @@ import {
   type SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { validateAgentOutput, type AgentRequest, type AgentScriptOutput } from '@sitecraft/shared';
+import {
+  DESCRIPTION_MAX_CHARS,
+  NAME_MAX_CHARS,
+  validateAgentOutput,
+  type AgentRequest,
+  type AgentScriptOutput,
+} from '@sitecraft/shared';
 import { nullLogger, type Logger } from './log.js';
 import { buildSystemPrompt, buildUserPrompt, OUTPUT_SCHEMA } from './systemPrompt.js';
 
@@ -125,8 +131,49 @@ interface Collected {
   model: string | undefined;
 }
 
+/**
+ * Shorten text to at most `max` characters. Whitespace is collapsed first.
+ * Prefers the last full sentence that ends in the second half of the limit,
+ * then the last word boundary plus "...", then a hard cut plus "...".
+ */
+export function clampText(text: string, max: number): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const room = Math.max(0, max - 3);
+  const head = t.slice(0, room);
+  const half = Math.floor(max / 2);
+  const sentenceEnd = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
+  if (sentenceEnd >= half) return head.slice(0, sentenceEnd + 1);
+  const space = head.lastIndexOf(' ');
+  if (space >= half) return `${head.slice(0, space)}...`;
+  return `${head}...`;
+}
+
+/**
+ * Clamp the two label fields (name, description) before validation. The
+ * model sometimes writes a long description for a complex request. That must
+ * not throw away a finished run: the code is what matters. Other fields are
+ * left alone so validateAgentOutput still reports real problems.
+ */
+export function normalizeAgentOutput(candidate: unknown, logger: Logger = nullLogger): unknown {
+  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) return candidate;
+  const out: Record<string, unknown> = { ...(candidate as Record<string, unknown>) };
+  const limits: [string, number][] = [
+    ['name', NAME_MAX_CHARS],
+    ['description', DESCRIPTION_MAX_CHARS],
+  ];
+  for (const [field, max] of limits) {
+    const value = out[field];
+    if (typeof value !== 'string' || value.trim().length <= max) continue;
+    const clamped = clampText(value, max);
+    logger.warn('Agent output clamped', { field, from: value.length, to: clamped.length });
+    out[field] = clamped;
+  }
+  return out;
+}
+
 /** Turn the collected messages into a validated AgentScriptOutput or throw. */
-function extractOutput(c: Collected): AgentScriptOutput {
+function extractOutput(c: Collected, logger: Logger = nullLogger): AgentScriptOutput {
   const { result, assistantError } = c;
   if (!result) throw new Error(assistantError ?? 'The agent ended without a result.');
   if (result.subtype !== 'success') {
@@ -139,7 +186,7 @@ function extractOutput(c: Collected): AgentScriptOutput {
   let candidate: unknown = result.structured_output;
   if (candidate === undefined) candidate = parseJsonFromText(result.result ?? '');
   if (candidate === undefined) throw new Error('The agent returned no structured output.');
-  const v = validateAgentOutput(candidate);
+  const v = validateAgentOutput(normalizeAgentOutput(candidate, logger));
   if (!v.ok) throw new Error(`Agent output failed validation: ${v.error}`);
   if (v.value.kind === 'js') {
     const syntaxError = jsSyntaxError(v.value.code);
@@ -335,7 +382,7 @@ export const runAgent: RunAgentFn = async (payload, hooks, opts = {}) => {
     }
     if (signal?.aborted) throw new Error(CANCELLED_MESSAGE);
     hooks.onProgress('Validating result');
-    return extractOutput(c);
+    return extractOutput(c, logger);
   } finally {
     signal?.removeEventListener('abort', onAbort);
     await work.cleanup();

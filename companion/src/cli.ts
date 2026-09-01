@@ -370,7 +370,9 @@ async function cmdDoctor(args: ParsedArgs): Promise<number> {
       continue;
     }
     const res = checkManifest(p, wrapper, extensionId);
-    out(`  manifest:  ${p} ${res.ok ? 'ok' : `FAIL ${res.note}`} (${b})`);
+    // A missing manifest for a browser the user did not ask about is information, not a failure.
+    const label = res.ok ? 'ok' : explicit === undefined && res.note === 'missing' ? 'not installed' : `FAIL ${res.note}`;
+    out(`  manifest:  ${p} ${label} (${b})`);
     if (res.ok) manifestsOk++;
     else if (explicit !== undefined) failures++;
   }

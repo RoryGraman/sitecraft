@@ -123,8 +123,21 @@ export function usePage(bridge: Bridge): PageState {
           setInner((s) => ({ ...s, tab, ready: true }));
         } catch (e) {
           if (!alive) return;
-          console.warn('Sitecraft: could not read the active tab', e);
-          setInner((s) => ({ ...s, ready: true }));
+          // An old background worker does not know getActiveTab. This happens
+          // during an extension update: the panel reloads before the service
+          // worker restarts. Fall back to getDefaultTab, which every version
+          // answers, so the panel still targets a tab. Events take over once
+          // the new worker is live.
+          console.warn('Sitecraft: getActiveTab failed, trying getDefaultTab', e);
+          try {
+            const tab = await bridge.request({ type: 'getDefaultTab' });
+            if (!alive || events !== seen) return;
+            setInner((s) => ({ ...s, tab, ready: true }));
+          } catch (e2) {
+            if (!alive) return;
+            console.warn('Sitecraft: could not read the active tab', e2);
+            setInner((s) => ({ ...s, ready: true }));
+          }
         }
       };
       askAgain.current = () => void ask();

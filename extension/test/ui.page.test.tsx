@@ -99,8 +99,18 @@ describe('page strip', () => {
     expect(byTestId('page-strip').textContent).toContain('www.youtube.com');
   });
 
-  it('shows no page when getActiveTab rejects', async () => {
-    const bridge = new FakeBridge({ failing: ['getActiveTab'] });
+  it('falls back to getDefaultTab when getActiveTab is unknown (old background during update)', async () => {
+    const bridge = new FakeBridge({ failing: ['getActiveTab'], errors: { getActiveTab: 'Unknown request type: getActiveTab' } });
+    installWindow(3);
+    await mount(bridge);
+    // getDefaultTab answers with the first tab, so the panel still targets it.
+    expect(bridge.callsOf('getDefaultTab').length).toBeGreaterThan(0);
+    expect(byTestId('page-strip').textContent).toContain('www.youtube.com');
+    expect(byTestId<HTMLTextAreaElement>('chat-input').disabled).toBe(false);
+  });
+
+  it('shows no page when both getActiveTab and getDefaultTab reject', async () => {
+    const bridge = new FakeBridge({ failing: ['getActiveTab', 'getDefaultTab'] });
     await mount(bridge);
     expect(byTestId('page-strip').textContent).toContain('No web page is active.');
     expect(byTestId<HTMLTextAreaElement>('chat-input').disabled).toBe(true);

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" />
+    <title>Sitecraft Fixture</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header id="site-header">
+      <h1>Fixture Site</h1>
+      <nav aria-label="Main">
+        <a href="#home">Home</a>
+        <a href="#videos">Videos</a>
+        <a href="#about">About</a>
+      </nav>
+      <button id="theme-toggle" type="button">Toggle theme</button>
+    </header>
+
+    <aside id="promo-banner" class="promo" role="complementary">
+      <strong>Promo banner:</strong> Subscribe now and save 20%.
+      <button type="button" class="promo-close" aria-label="Close promo">x</button>
+    </aside>
+
+    <main>
+      <section id="feed" aria-label="Feed">
+        <h2>Latest videos</h2>
+        <ul class="video-list">
+          <li class="video"><a href="#v1">Video one</a></li>
+          <li class="video"><a href="#v2">Video two</a></li>
+          <li class="video"><a href="#v3">Video three</a></li>
+        </ul>
+      </section>
+
+      <section class="shorts-shelf" aria-label="Shorts">
+        <h2>Shorts</h2>
+        <div class="shorts-row">
+          <article class="short"><span>Short 1</span></article>
+          <article class="short"><span>Short 2</span></article>
+          <article class="short"><span>Short 3</span></article>
+          <article class="short"><span>Short 4</span></article>
+          <article class="short"><span>Short 5</span></article>
+          <article class="short"><span>Short 6</span></article>
+          <article class="short"><span>Short 7</span></article>
+          <article class="short"><span>Short 8</span></article>
+          <article class="short"><span>Short 9</span></article>
+          <article class="short"><span>Short 10</span></article>
+          <article class="short"><span>Short 11</span></article>
+          <article class="short"><span>Short 12</span></article>
+        </div>
+      </section>
+
+      <section id="comments" aria-label="Comments">
+        <h2>Comments</h2>
+        <ol class="comment-list">
+          <li class="comment"><b>ann:</b> First!</li>
+          <li class="comment"><b>bob:</b> Nice video.</li>
+          <li class="comment"><b>cat:</b> Where is part two?</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer id="site-footer">
+      <p>Fixture footer. <span id="status">Loading</span></p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

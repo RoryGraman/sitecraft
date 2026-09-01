@@ -4,6 +4,9 @@ import { EXTENSION_PUBLIC_KEY, HARNESS_ORIGINS } from '../shared/src/extension.t
 // Vite loads this file in Node. The extension tsconfig has no Node types.
 declare const process: { env: Record<string, string | undefined> };
 
+// Rendered from extension/icons-src by scripts/gen-icons.mjs.
+const ICONS = { 16: 'icons/16.png', 32: 'icons/32.png', 48: 'icons/48.png', 128: 'icons/128.png' };
+
 /**
  * The dev harness (a web page on localhost) may drive the extension only when
  * the build opts in: `vite build --mode harness` or SITECRAFT_HARNESS=1.
@@ -31,8 +34,8 @@ export default defineManifest((env) => {
       },
     ],
     side_panel: { default_path: 'src/sidepanel/index.html' },
-    action: { default_title: 'Open Sitecraft' },
+    action: { default_title: 'Open Sitecraft', default_icon: ICONS },
     ...(harness ? { externally_connectable: { matches: HARNESS_ORIGINS } } : {}),
-    icons: { 16: 'icons/16.png', 48: 'icons/48.png', 128: 'icons/128.png' },
+    icons: ICONS,
   };
 });

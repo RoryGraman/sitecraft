@@ -40,6 +40,8 @@ export function Chat(props: ChatProps) {
   const counter = useRef(0);
   const runIdRef = useRef<string | null>(null);
   const runTabRef = useRef<number | null>(null);
+  /** Id of the script the running request modifies, so runDone clears only that chip. */
+  const runModifyIdRef = useRef<string | null>(null);
   const modifyRef = useRef<SiteScript | null>(modifyTarget);
   const clearModifyRef = useRef(onClearModify);
   const cancelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,7 +105,7 @@ export function Chat(props: ChatProps) {
             isUpdate: ev.outcome.isUpdate,
             tabId: usedTab,
           });
-          if (modifyRef.current) clearModifyRef.current();
+          if (modifyRef.current && modifyRef.current.id === runModifyIdRef.current) clearModifyRef.current();
         } else {
           push({ kind: 'error', text: ev.outcome.error });
         }
@@ -138,6 +140,7 @@ export function Chat(props: ChatProps) {
     try {
       const started = await bridge.request(req);
       runTabRef.current = tabId;
+      runModifyIdRef.current = modifyTarget?.id ?? null;
       setRun(started.runId);
       setProgress('Starting');
       setText('');

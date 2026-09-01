@@ -131,14 +131,36 @@ export function isCssBlocked(style: HTMLStyleElement, css: string): boolean {
   }
 }
 
+/** Ids of the enabled JS scripts that run on `url`. Only these may report errors. */
+export function computeJsIds(scripts: unknown, url: string): Set<string> {
+  const ids = new Set<string>();
+  if (!Array.isArray(scripts)) return ids;
+  for (const s of scripts) {
+    if (isSiteScriptLike(s) && s.enabled && s.kind === 'js' && matchesPattern(s.urlPattern, url)) ids.add(s.id);
+  }
+  return ids;
+}
+
+export interface InstallCssOptions {
+  /** Called with the current JS script ids for this URL, on load and on every change. */
+  onJsIds?(ids: Set<string>): void;
+}
+
 /**
  * Read the saved scripts, apply the CSS for `url`, report CSP blocking, and
  * keep the style in sync with later storage changes. Never rejects.
  */
-export async function installCss(doc: Document, url: string, storage: StorageLike, send: SendMessage): Promise<void> {
+export async function installCss(
+  doc: Document,
+  url: string,
+  storage: StorageLike,
+  send: SendMessage,
+  options: InstallCssOptions = {},
+): Promise<void> {
   let sawChange = false;
 
   const update = (raw: unknown): void => {
+    options.onJsIds?.(computeJsIds(raw, url));
     const css = computeCss(raw, url);
     const style = applyCss(doc, css);
     if (style && isCssBlocked(style, css)) send({ type: 'cssBlocked', url });
@@ -179,16 +201,25 @@ export async function installCss(doc: Document, url: string, storage: StorageLik
 // Error relay (MAIN world -> content script -> background)
 // ---------------------------------------------------------------------------
 
+/** Most error reports one page load may forward. Page scripts share this window. */
+export const MAX_ERROR_REPORTS_PER_PAGE = 25;
+
 /**
  * Forward script-error posts from the JS bundle running in the MAIN world.
- * Only messages from this same window with the sitecraft marker are accepted.
+ * The page's own scripts share that window and can post the same shape, so a
+ * report is forwarded only when `isKnownScript` accepts its id (an enabled JS
+ * script that runs on this URL) and the per-page cap is not reached.
  * Returns a function that removes the listener.
  */
-export function installErrorRelay(win: Window, send: SendMessage): () => void {
+export function installErrorRelay(win: Window, send: SendMessage, isKnownScript: (id: string) => boolean = () => true): () => void {
+  let forwarded = 0;
   const onMessage = (event: MessageEvent): void => {
     if (event.source !== win) return;
     const data: unknown = event.data;
     if (!isScriptErrorPost(data)) return;
+    if (!isKnownScript(data.scriptId)) return;
+    if (forwarded >= MAX_ERROR_REPORTS_PER_PAGE) return;
+    forwarded += 1;
     send({
       type: 'scriptError',
       scriptId: data.scriptId,
@@ -276,9 +307,11 @@ export async function start(deps: ContentDeps = {}): Promise<void> {
   }
 
   const send = createSender(api.runtime);
+  // Filled by installCss from storage: the JS scripts that run on this page.
+  let knownJsIds = new Set<string>();
 
   try {
-    installErrorRelay(win, send);
+    installErrorRelay(win, send, (id) => knownJsIds.has(id));
   } catch (e) {
     console.warn('Sitecraft: could not install the error relay.', e);
   }
@@ -288,7 +321,11 @@ export async function start(deps: ContentDeps = {}): Promise<void> {
     console.warn('Sitecraft: could not install message handlers.', e);
   }
 
-  await installCss(doc, win.location.href, api.storage, send);
+  await installCss(doc, win.location.href, api.storage, send, {
+    onJsIds: (ids) => {
+      knownJsIds = ids;
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -54,11 +54,20 @@ function errorMessage(err: unknown): string {
  * Replace every registered user script with the bundles built from `scripts`.
  * Unregisters everything first, then registers each bundle on its own.
  * Failures are reported through `onBundleError` and do not stop the rest.
+ *
+ * Calls are serialized. Two overlapping syncs would otherwise interleave
+ * unregister-all with the other call's registers and Chrome would reject the
+ * duplicate ids. The last call always wins because it runs last.
  */
-export async function registerAll(
-  scripts: SiteScript[],
-  onBundleError?: BundleErrorCallback,
-): Promise<RegisterAllResult> {
+export function registerAll(scripts: SiteScript[], onBundleError?: BundleErrorCallback): Promise<RegisterAllResult> {
+  const run = queue.then(() => registerAllNow(scripts, onBundleError));
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+let queue: Promise<unknown> = Promise.resolve();
+
+async function registerAllNow(scripts: SiteScript[], onBundleError?: BundleErrorCallback): Promise<RegisterAllResult> {
   if (!isUserScriptsAvailable()) {
     return { registered: 0, skipped: true };
   }

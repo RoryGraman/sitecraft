@@ -278,12 +278,23 @@ export function createRouter(deps: RouterDeps): Router {
     return authInFlight;
   }
 
-  async function checkOnboarding(): Promise<OnboardingStatus> {
+  function freshAuthOk(): boolean {
+    return authCache !== null && authCache.result.ok && clock() - authCache.at < AUTH_OK_TTL_MS;
+  }
+
+  /**
+   * Live status of the three onboarding checks. With `quick`, the Claude login
+   * check (a real model call) runs only when a fresh success is not cached;
+   * otherwise it is reported as unknown. Returning users get a fast answer.
+   */
+  async function checkOnboarding(quick: boolean): Promise<OnboardingStatus> {
     const userScriptsEnabled = deps.isUserScriptsAvailable();
     const companion = await native.ping();
     let claudeLogin: OnboardingStatus['claudeLogin'];
     if (companion.state !== 'connected') {
       claudeLogin = { state: 'unknown', detail: 'Waiting for the companion.' };
+    } else if (quick && !freshAuthOk()) {
+      claudeLogin = { state: 'unknown', detail: 'Not checked yet.' };
     } else {
       const auth = await checkAuthCached();
       claudeLogin = { state: auth.ok ? 'ok' : 'error', detail: auth.detail };
@@ -310,19 +321,30 @@ export function createRouter(deps: RouterDeps): Router {
         runs.cancel(req.runId);
         return sidebarState();
       case 'keepScript':
+        await findScript(req.id);
         await store.patchScript(req.id, { trial: false });
         return sidebarState();
       case 'undoScript':
+        await findScript(req.id);
         await store.patchScript(req.id, { enabled: false });
         await sync();
-        if (req.tabId !== undefined) await tabs.reload(req.tabId);
+        if (req.tabId !== undefined) {
+          // The script is off either way. A closed tab is not an error.
+          try {
+            await tabs.reload(req.tabId);
+          } catch (e) {
+            console.warn('Sitecraft: could not reload the tab after undo', e);
+          }
+        }
         return sidebarState();
       case 'toggleScript':
+        if (typeof req.enabled !== 'boolean') throw new Error('enabled must be true or false.');
+        await findScript(req.id);
         await store.patchScript(req.id, { enabled: req.enabled });
         await sync();
         return sidebarState();
       case 'setPriority':
-        await store.patchScript(req.id, { priority: req.priority });
+        await updateValidated(req.id, { priority: req.priority });
         await sync();
         return sidebarState();
       case 'updateCode':
@@ -349,7 +371,7 @@ export function createRouter(deps: RouterDeps): Router {
         authCache = null;
         return native.ping();
       case 'checkOnboarding':
-        return checkOnboarding();
+        return checkOnboarding(req.quick === true);
       case 'setOnboardingDone':
         await store.patchSettings({ onboardingDone: req.done });
         return sidebarState();

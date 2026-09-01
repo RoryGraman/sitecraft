@@ -11,7 +11,7 @@
  * In host mode nothing may be written to stdout except frames. Every other
  * mode prints plain text to stdout.
  */
-import { accessSync, constants as fsConstants, existsSync, readFileSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,10 +21,12 @@ import { checkClaudeLogin, runAgent, type AgentRunOptions } from './agent.js';
 import { startHost } from './host.js';
 import {
   BROWSER_IDS,
+  hostManifestDir,
   hostManifestPath,
   install,
   isBrowserId,
   isValidExtensionId,
+  parseWrapperScript,
   supportedBrowsers,
   uninstall,
   wrapperPath,
@@ -216,6 +218,30 @@ async function cmdHost(origin: string | undefined): Promise<number> {
   return 0;
 }
 
+function safeRealpath(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
+/**
+ * The node path to pin in the wrapper. process.execPath is a resolved real
+ * path (for Homebrew: a versioned Cellar directory that a node upgrade
+ * removes). Prefer the PATH entry that points at the same binary, such as
+ * /opt/homebrew/bin/node, which the package manager keeps current.
+ */
+export function stableNodePath(execPath: string = process.execPath, pathEnv: string | undefined = process.env.PATH): string {
+  const real = safeRealpath(execPath);
+  for (const dir of (pathEnv ?? '').split(path.delimiter)) {
+    if (dir === '') continue;
+    const candidate = path.join(dir, 'node');
+    if (existsSync(candidate) && safeRealpath(candidate) === real) return candidate;
+  }
+  return execPath;
+}
+
 async function cmdInstall(args: ParsedArgs): Promise<number> {
   const extensionId = flagString(args.flags, 'extension-id', 'id') ?? EXTENSION_ID;
   if (!isValidExtensionId(extensionId)) {
@@ -223,16 +249,17 @@ async function cmdInstall(args: ParsedArgs): Promise<number> {
     return 1;
   }
   const browsers = parseBrowsers(flagString(args.flags, 'browser', 'browsers'), ['chrome']);
+  const nodePath = stableNodePath();
   const res = await install({
     extensionId,
     browsers,
     home: os.homedir(),
-    nodePath: process.execPath,
+    nodePath,
     cliPath: CLI_PATH,
     platform: process.platform,
   });
   out('Installed the Sitecraft companion.');
-  out(`  node:      ${process.execPath}`);
+  out(`  node:      ${nodePath}`);
   out(`  cli:       ${CLI_PATH}`);
   out(`  wrapper:   ${res.wrapperPath}`);
   res.manifestPaths.forEach((p, i) => out(`  manifest:  ${p} (${browsers[i]})`));
@@ -262,6 +289,15 @@ function isExecutable(p: string): boolean {
   try {
     accessSync(p, fsConstants.X_OK);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the browser's profile directory (the parent of NativeMessagingHosts) exists. */
+function browserPresent(browser: BrowserId, home: string, platform: NodeJS.Platform): boolean {
+  try {
+    return existsSync(path.dirname(hostManifestDir(browser, home, platform)));
   } catch {
     return false;
   }
@@ -302,8 +338,29 @@ async function cmdDoctor(args: ParsedArgs): Promise<number> {
   out(`  wrapper:   ${wrapper} ${wrapperOk ? (wrapperExec ? 'ok' : 'FAIL not executable') : 'FAIL missing'}`);
   if (!wrapperExec) failures++;
 
+  // The wrapper pins absolute paths. Check that they still exist (a node
+  // upgrade or a moved checkout breaks the host silently otherwise).
+  if (wrapperOk) {
+    const parsed = parseWrapperScript(readFileSync(wrapper, 'utf8'));
+    if (!parsed) {
+      out('  wrapper:   FAIL unexpected content; run "sitecraft install"');
+      failures++;
+    } else {
+      const nodeOk = isExecutable(parsed.nodePath);
+      const cliOk = existsSync(parsed.cliPath);
+      out(`  wrapper:   node ${parsed.nodePath} ${nodeOk ? 'ok' : 'FAIL missing; run "sitecraft install"'}`);
+      out(`  wrapper:   cli  ${parsed.cliPath} ${cliOk ? 'ok' : 'FAIL missing; run "sitecraft install"'}`);
+      if (!nodeOk || !cliOk) failures++;
+    }
+  }
+
+  // Without --browser, report only browsers that exist on this machine.
+  const candidates = explicit !== undefined ? browsers : browsers.filter((b) => browserPresent(b, home, platform));
+  if (explicit === undefined) {
+    out(`  browsers:  ${candidates.length > 0 ? candidates.join(', ') : 'none found'} (pass --browser to check others)`);
+  }
   let manifestsOk = 0;
-  for (const b of browsers) {
+  for (const b of candidates) {
     let p: string;
     try {
       p = hostManifestPath(b, home, platform);
@@ -322,9 +379,12 @@ async function cmdDoctor(args: ParsedArgs): Promise<number> {
     out('  No usable host manifest found. Run "sitecraft install".');
   }
 
+  // Use the same model the host will use, so this check matches real runs.
+  const config = readHostConfig(home, createLogger({ file: null, toStderr: true, level: 'warn' }));
+  out(`  config:    ${config.model ? `model ${config.model}` : 'default model'}${config.maxTurns ? `, maxTurns ${config.maxTurns}` : ''}`);
   out('  claude:    checking login...');
   try {
-    const login = await checkClaudeLogin({ timeoutMs: AUTH_TIMEOUT_MS });
+    const login = await checkClaudeLogin({ timeoutMs: AUTH_TIMEOUT_MS, model: config.model });
     out(`  claude:    ${login.ok ? 'ok' : 'FAIL'} ${login.detail}`);
     if (!login.ok) failures++;
   } catch (e) {

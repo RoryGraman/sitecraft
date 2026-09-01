@@ -221,6 +221,20 @@ describe('createRunManager: failure paths', () => {
     expect(h.registerAll).not.toHaveBeenCalled();
   });
 
+  it('saves nothing when the pattern does not match the page (prompt injection guard)', async () => {
+    const h = harness();
+    h.native.run.mockResolvedValueOnce({ ...OUTPUT, urlPattern: 'https://evil.example/*' });
+    const { runId } = await h.manager.start({ tabId: 5, text: 'x' });
+    const ev = await h.done(runId);
+    expect(ev.outcome.ok).toBe(false);
+    if (ev.outcome.ok) return;
+    expect(ev.outcome.error).toContain('different site');
+    expect(ev.outcome.error).toContain('https://evil.example/*');
+    expect(h.area.scripts()).toHaveLength(0);
+    expect(h.registerAll).not.toHaveBeenCalled();
+    expect(h.reloadTab).not.toHaveBeenCalled();
+  });
+
   it('reports a snapshot failure', async () => {
     const h = harness();
     h.takeSnapshot.mockRejectedValueOnce(new Error('Cannot access a chrome:// URL'));

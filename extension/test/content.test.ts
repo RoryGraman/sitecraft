@@ -483,7 +483,8 @@ describe('createSender', () => {
 describe('start', () => {
   it('wires css, error relay and message handlers using the global chrome', async () => {
     document.body.innerHTML = '<section id="s">S</section>';
-    const chrome = installChrome(fakeChrome({ scripts: [mk({ code: '.wired { x: 1 }' })] }));
+    // id-9 is an enabled JS script for this page, so its error reports are trusted.
+    const chrome = installChrome(fakeChrome({ scripts: [mk({ code: '.wired { x: 1 }' }), mk({ id: 'id-9', kind: 'js', code: 'x()' })] }));
     await start();
 
     expect(styleEl()?.textContent).toContain('.wired');

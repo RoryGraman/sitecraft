@@ -43,21 +43,21 @@ export function App({ bridge }: AppProps) {
     bridge
       .request({ type: 'getState' })
       .then((s) => {
-        if (alive) setState(s);
+        if (!alive) return;
+        setState(s);
+        // Returning users get a quick check (no model call). The full check,
+        // including the Claude login, runs only while the setup view is open.
+        return bridge.request({ type: 'checkOnboarding', quick: s.settings.onboardingDone }).then((o) => {
+          if (alive) {
+            setOnboarding(o);
+            setOnboardingError(null);
+          }
+        });
       })
       .catch((e: unknown) => {
-        if (alive) setLoadError(errorMessage(e));
-      });
-    bridge
-      .request({ type: 'checkOnboarding' })
-      .then((o) => {
-        if (alive) {
-          setOnboarding(o);
-          setOnboardingError(null);
-        }
-      })
-      .catch((e: unknown) => {
-        if (alive) setOnboardingError(errorMessage(e));
+        if (!alive) return;
+        setLoadError((current) => current ?? errorMessage(e));
+        setOnboardingError(errorMessage(e));
       });
     return () => {
       alive = false;
@@ -127,7 +127,10 @@ export function App({ bridge }: AppProps) {
   const companion: CompanionStatus = state.companion.state === 'unknown' && onboarding ? onboarding.companion : state.companion;
   const setupComplete = isSetupComplete(onboarding, state.settings.onboardingDone);
   const checking = onboarding === null && onboardingError === null;
-  const showOnboarding = setupOpen || !setupComplete;
+  // Before the first check answers, trust the saved flag so returning users
+  // see the app at once instead of a blocking "Checking setup." screen.
+  const optimistic = onboarding === null && state.settings.onboardingDone;
+  const showOnboarding = setupOpen || (!optimistic && !setupComplete);
 
   return (
     <div className="app" data-mode={bridge.mode}>
@@ -156,8 +159,8 @@ export function App({ bridge }: AppProps) {
       </header>
 
       <main className="main">
-        {showOnboarding ? (
-          checking ? (
+        {showOnboarding &&
+          (checking ? (
             <p className="muted pad">Checking setup.</p>
           ) : (
             <Onboarding
@@ -169,24 +172,23 @@ export function App({ bridge }: AppProps) {
               canClose={setupOpen && setupComplete}
               onClose={closeSetup}
             />
-          )
-        ) : (
-          <>
-            <div hidden={view !== 'chat'} className="view">
-              <Chat
-                bridge={bridge}
-                state={state}
-                modifyTarget={modifyTarget}
-                onModify={handleModify}
-                onClearModify={clearModify}
-                onState={setState}
-              />
-            </div>
-            <div hidden={view !== 'manager'} className="view">
-              <Manager bridge={bridge} state={state} onModify={handleModify} onState={setState} />
-            </div>
-          </>
-        )}
+          ))}
+        {/* Chat and Manager stay mounted while setup is shown, so a thread and
+            an in-flight run survive a temporary gate (for example after a
+            service worker restart). */}
+        <div hidden={showOnboarding || view !== 'chat'} className="view">
+          <Chat
+            bridge={bridge}
+            state={state}
+            modifyTarget={modifyTarget}
+            onModify={handleModify}
+            onClearModify={clearModify}
+            onState={setState}
+          />
+        </div>
+        <div hidden={showOnboarding || view !== 'manager'} className="view">
+          <Manager bridge={bridge} state={state} onModify={handleModify} onState={setState} />
+        </div>
       </main>
 
       <footer className="footer">

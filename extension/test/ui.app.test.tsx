@@ -209,7 +209,10 @@ describe('App onboarding gate', () => {
     expect(text()).toContain('npx sitecraft install');
     expect(text()).toContain('node companion/bin/sitecraft.js install');
     expect(text()).toContain('Specified native messaging host not found.');
-    expect(document.querySelector('[data-testid="chat-input"]')).toBeNull();
+    // Chat stays mounted (so a thread survives a temporary gate) but is hidden.
+    const chatInput = document.querySelector('[data-testid="chat-input"]');
+    expect(chatInput).not.toBeNull();
+    expect(chatInput?.closest('[hidden]')).not.toBeNull();
   });
 
   it('opens the extension details page through the background', async () => {

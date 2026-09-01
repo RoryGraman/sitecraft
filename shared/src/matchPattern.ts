@@ -142,6 +142,8 @@ export function parseMatchPattern(pattern: string): ParsedMatchPattern | null {
   if (!PATH_RE.test(path)) return null;
   const hostPort = parseHostPort(rest.slice(0, slash));
   if (hostPort === null) return null;
+  // Chrome rejects a numeric port on the '*' scheme (kInvalidPort). '*' is fine.
+  if (scheme === '*' && hostPort.port !== null && hostPort.port !== '*') return null;
   return { scheme, ...hostPort, path, allUrls: false };
 }
 

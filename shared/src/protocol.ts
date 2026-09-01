@@ -56,7 +56,11 @@ export type SidebarRequest =
   | { type: 'exportScripts' }
   | { type: 'importScripts'; json: string }
   | { type: 'checkCompanion' }
-  | { type: 'checkOnboarding' }
+  | {
+      type: 'checkOnboarding';
+      /** True: skip the (paid, slow) Claude login check unless a fresh result is cached. */
+      quick?: boolean;
+    }
   | { type: 'setOnboardingDone'; done: boolean }
   | { type: 'reloadTab'; tabId: number }
   | { type: 'openUrl'; url: string };

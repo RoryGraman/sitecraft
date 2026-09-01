@@ -165,6 +165,13 @@ export function createRunManager(deps: RunManagerDeps): RunManager {
 
     const valid = validateAgentOutput(output);
     if (!valid.ok) throw new Error(`Claude returned an invalid script: ${valid.error}`);
+    // The page content is untrusted. A script may only target the site the
+    // user is looking at, so a prompt-injected pattern for another site is refused.
+    if (!matchesPattern(valid.value.urlPattern, page.url)) {
+      throw new Error(
+        `Claude returned a script for a different site. Its pattern ${valid.value.urlPattern} does not match ${page.url}. Nothing was saved.`,
+      );
+    }
 
     progress(runId, 'Saving the script.');
     const script = await save(valid.value, target);

@@ -13,13 +13,19 @@ describe('parseMatchPattern', () => {
     });
   });
   it('parses subdomain wildcard and port', () => {
-    expect(parseMatchPattern('*://*.example.com:8080/foo*')).toMatchObject({
-      scheme: '*',
+    expect(parseMatchPattern('https://*.example.com:8080/foo*')).toMatchObject({
+      scheme: 'https',
       host: 'example.com',
       subdomains: true,
       port: '8080',
       path: '/foo*',
     });
+  });
+  it('rejects a numeric port on the star scheme, as Chrome does, but allows a star port', () => {
+    expect(parseMatchPattern('*://*.example.com:8080/foo*')).toBeNull();
+    expect(parseMatchPattern('*://a.com:443/*')).toBeNull();
+    expect(parseMatchPattern('*://a.com:*/*')).toMatchObject({ scheme: '*', host: 'a.com', port: '*' });
+    expect(matchesPattern('*://a.com:8080/*', 'https://a.com:8080/')).toBe(false);
   });
   it('parses <all_urls>', () => {
     expect(parseMatchPattern('<all_urls>')).toMatchObject({ allUrls: true });

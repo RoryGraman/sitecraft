@@ -62,7 +62,7 @@ Two parts talk over Chrome native messaging.
    pnpm build
    ```
 
-   This produces `extension/dist` (the unpacked extension, including the dev harness page) and `companion/dist/cli.js` (the companion bundle).
+   This produces `extension/dist` (the unpacked extension) and `companion/dist/cli.js` (the companion bundle). This is the production build: no web page can connect to the extension. For browser-driven testing with the dev harness, build with `pnpm build:harness` instead (see "Dev harness and fixture").
 
 2. Load the extension.
 
@@ -161,7 +161,15 @@ This starts two zero-dependency static servers in one process (`scripts/serve.mj
 
 `node scripts/serve.mjs --root <dir> --port <n>` serves one directory instead.
 
-How the harness connects: the manifest's `externally_connectable.matches` allows `http://localhost/*` and `http://127.0.0.1/*` (any port). The harness page calls `chrome.runtime.connect('hoadedohbfjjmkajibiafgoajoicjdba', { name: 'sitecraft-sidebar' })` and the background accepts the port in `onConnectExternal`. The footer shows "Harness" in this mode. Requirements: the extension must be loaded with the stable id, the page must be opened from `localhost` or `127.0.0.1`, and the harness is rebuilt only by `pnpm build`. Because the harness is itself a tab, the default target tab is the most recently active `http` or `https` tab that is not the harness. Open the fixture in another tab first, then use the tab picker if needed.
+The harness needs a harness build:
+
+```sh
+pnpm build:harness
+```
+
+Only this build (Vite mode `harness`, or `SITECRAFT_HARNESS=1`) adds `externally_connectable.matches` for `http://localhost/*` and `http://127.0.0.1/*` (any port) and names the extension "Sitecraft (harness build)". A normal `pnpm build` has no `externally_connectable` key, so no web page can talk to the extension. Any page served from localhost can drive a harness build, including creating scripts, so do not use a harness build for daily browsing.
+
+How the harness connects: the harness page calls `chrome.runtime.connect('hoadedohbfjjmkajibiafgoajoicjdba', { name: 'sitecraft-sidebar' })` and the background accepts the port in `onConnectExternal` after checking the sender origin. The footer shows "Harness" in this mode. Requirements: the extension must be loaded with the stable id, and the page must be opened from `localhost` or `127.0.0.1`. Because the harness is itself a tab, the default target tab is the most recently active `http` or `https` tab that is not the harness. Open the fixture in another tab first, then use the tab picker if needed.
 
 The fixture page (`fixtures/index.html`) has a strict CSP (`default-src 'self'; script-src 'self'; style-src 'self'`). Inline styles and inline scripts from the page are blocked, which exercises both the `insertCSS` fallback and the `chrome.userScripts` path. Known elements:
 

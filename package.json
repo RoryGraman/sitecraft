@@ -6,6 +6,7 @@
   "packageManager": "pnpm@9.6.0",
   "scripts": {
     "build": "pnpm -r run build",
+    "build:harness": "pnpm --filter @sitecraft/extension run build:harness && pnpm --filter sitecraft run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm -r run typecheck",

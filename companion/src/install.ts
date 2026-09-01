@@ -71,8 +71,26 @@ export function wrapperPath(home: string): string {
   return path.join(sitecraftHome(home), WRAPPER_FILENAME);
 }
 
+/** Quote a path for /bin/sh inside double quotes. */
+export function shQuote(value: string): string {
+  return '"' + value.replace(/(["\\$`])/g, '\\$1') + '"';
+}
+
+function shUnquote(quoted: string): string {
+  return quoted.replace(/\\(["\\$`])/g, '$1');
+}
+
 export function buildWrapperScript(opts: { nodePath: string; cliPath: string }): string {
-  return `#!/bin/sh\nexec "${opts.nodePath}" "${opts.cliPath}" host "$@"\n`;
+  return `#!/bin/sh\nexec ${shQuote(opts.nodePath)} ${shQuote(opts.cliPath)} host "$@"\n`;
+}
+
+const WRAPPER_EXEC_RE = /^exec "((?:\\.|[^"\\])*)" "((?:\\.|[^"\\])*)" host "\$@"$/m;
+
+/** Read the node and CLI paths back out of a wrapper script. Null when it is not ours. */
+export function parseWrapperScript(content: string): { nodePath: string; cliPath: string } | null {
+  const m = WRAPPER_EXEC_RE.exec(content);
+  if (!m) return null;
+  return { nodePath: shUnquote(m[1] ?? ''), cliPath: shUnquote(m[2] ?? '') };
 }
 
 export interface HostManifest {

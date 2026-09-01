@@ -619,7 +619,7 @@ for await (const m of q) { /* progress + collect result */ }
 Auth: the CLI binary resolves credentials itself. On this machine the claude.ai login (max subscription) is used with no env var; the init message reports `apiKeySource: 'none'`. Do not set `env` (the child must inherit `HOME` and `PATH`).
 Measured: an isolated 1-turn "PONG" run costs about $0.002 and 1.3 s. Without `settingSources: []` the user's hooks and MCP servers load and a run costs $0.39.
 
-Smoke scripts that work: `/Users/rory/.claude/jobs/4072d324/tmp/sdk-probe/smoke{,2,3,4}.mjs`.
+Smoke scripts that work: `sdk-probe/smoke{,2,3,4}.mjs` (kept in a scratch directory during development).
 
 ### A.2 Chrome platform facts (Chrome 152, CRXJS 2.7.1, Vite 8.2)
 

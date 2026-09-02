@@ -14,6 +14,10 @@ export default defineConfig(({ mode }) => ({
   define: { __SITECRAFT_HARNESS__: JSON.stringify(isHarnessBuild(mode, process.env)) },
   server: { port: 5173, strictPort: true },
   build: {
+    // Never empty dist. Chrome watches this folder for the unpacked
+    // extension; if manifest.json vanishes mid-build, Chrome drops the
+    // extension. Overwriting in place makes Chrome reload it instead.
+    emptyOutDir: false,
     rollupOptions: {
       // Pages the manifest does not name. The harness is a normal web page
       // served from dist/ by scripts/serve.mjs for browser-driven E2E tests.

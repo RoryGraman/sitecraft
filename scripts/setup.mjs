@@ -185,7 +185,7 @@ async function confirmWhenReady(check, { instruction, fail }) {
     const answer = await prompt(instruction);
     if (answer === null) return null;
     const choice = answer.toLowerCase();
-    if (choice === 'skip' || choice === 's') return 'skipped';
+    if (choice === 'go' || choice === 'g' || choice === 'skip' || choice === 's') return 'skipped';
     state = check();
     if (state) return state;
     out(`  ${yellow('•')} ${fail}`);
@@ -279,17 +279,18 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     return false;
   }
 
-  // Step A: the extension is loaded from this checkout. A copy loaded from a
-  // different folder is a real mismatch; a load Chrome has not yet flushed to
-  // disk reads as 'unknown', which the Enter check tolerates.
+  // Chrome writes its preferences file lazily, in both directions. So these
+  // two checks are advisory: a confirmed match is reported, and anything else
+  // hands the final check to the panel, which reads Chrome's live state.
+
+  // Step A: the extension is loaded from this checkout.
   const loadCheck = () => {
     const s = scan(browser);
-    const st = distStatus(s);
-    return st === 'match' || st === 'unknown' ? s : null;
+    return distStatus(s) === 'match' ? s : null;
   };
   if (!loadCheck()) {
     if (distStatus(state) === 'mismatch') {
-      out(`${yellow('•')} Sitecraft is loaded from another folder:`);
+      out(`${yellow('•')} Chrome lists a Sitecraft loaded from another folder:`);
       out(dim(`    ${state.path}`));
       out(`  ${DOT} Remove that copy first, then load this one:`);
     } else {
@@ -302,12 +303,12 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     if (copied) out(dim('       The path is on your clipboard. In the picker press Cmd+Shift+G and paste.'));
     openPage(browser, EXTENSIONS_URL, noOpen);
     const found = await confirmWhenReady(loadCheck, {
-      instruction: `  ${DOT} Press Enter once it shows in the list (or type "skip"): `,
-      fail: 'I could not find the extension. Load it once more, then press Enter.',
+      instruction: `  ${DOT} Press Enter once it shows in the list (or type "go" to continue): `,
+      fail: 'Not found on disk yet. Chrome saves this lazily. Press Enter to check again, or type "go".',
     });
     if (!found || found === 'skipped') {
-      out(`${yellow('•')} Not loaded yet. Load it, then run ${cyan('./setup')} again.`);
-      return false;
+      out(`${yellow('•')} Not confirmed from disk. The panel checklist will confirm it.`);
+      return 'unconfirmed';
     }
     state = found;
   }
@@ -322,12 +323,12 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     out(`  One switch left: turn on ${bold('Allow User Scripts')}.`);
     openPage(browser, DETAILS_URL, noOpen);
     const found = await confirmWhenReady(toggleCheck, {
-      instruction: `  ${DOT} Press Enter once the switch is on (or type "skip"): `,
-      fail: 'The switch still reads off. Turn it on, then press Enter.',
+      instruction: `  ${DOT} Press Enter once the switch is on (or type "go" to continue): `,
+      fail: 'The switch still reads off on disk. Press Enter to check again, or type "go".',
     });
     if (!found || found === 'skipped') {
-      out(`${yellow('•')} Still off. Turn it on, then run ${cyan('./setup')} again.`);
-      return false;
+      out(`${yellow('•')} Not confirmed from disk. The panel checklist will confirm it.`);
+      return 'unconfirmed';
     }
   }
   out(`${OK} User scripts allowed`);
@@ -340,6 +341,13 @@ function summary(state) {
   if (state === 'skipped') {
     out(bold('Terminal setup is done.'));
     out('  Finish the Chrome steps above. The side panel shows a live checklist.');
+    out();
+    return;
+  }
+  if (state === 'unconfirmed') {
+    out(bold('Terminal setup is done.'));
+    out('  I could not confirm the Chrome steps from disk. Chrome saves that lazily.');
+    out(`  Click the ${bold('Sitecraft')} icon. The panel checklist confirms the extension and the switch.`);
     out();
     return;
   }

@@ -131,7 +131,12 @@ export function App({ bridge }: AppProps) {
     return (
       <div className="app">
         <header className="header">
-          <div className="brand">Sitecraft</div>
+          <div className="brand">
+            <svg className="brand-logo" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" />
+            </svg>
+            Sitecraft
+          </div>
         </header>
         <main className="main pad">
           {loadError ? (
@@ -171,7 +176,12 @@ export function App({ bridge }: AppProps) {
   return (
     <div className="app" data-mode={bridge.mode}>
       <header className="header">
-        <div className="brand">Sitecraft</div>
+        <div className="brand">
+          <svg className="brand-logo" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" />
+          </svg>
+          Sitecraft
+        </div>
         {!showOnboarding && (
           <nav className="tabs" aria-label="Views">
             <button
@@ -243,11 +253,12 @@ export function App({ bridge }: AppProps) {
 
       <footer className="footer">
         <span className={dotClass(companion)} aria-hidden="true" />
-        <span title={companion.detail ?? ''}>Companion: {companionLabel(companion)}</span>
-        {bridge.mode === 'external' && <span className="muted">Harness</span>}
+        <span className="footer-label" title={companion.detail ?? companionLabel(companion)}>
+          Companion: {companionLabel(companion).replace(/\s*\(v[^)]*\)$/, '')}
+        </span>
         {bridge.mode === 'external' && (
-          <button type="button" className="link" data-testid="dev-reload" onClick={devReload}>
-            Reload extension
+          <button type="button" className="link" data-testid="dev-reload" title="Reload the extension" onClick={devReload}>
+            Reload
           </button>
         )}
         {footerError && (

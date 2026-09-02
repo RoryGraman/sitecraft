@@ -59,7 +59,9 @@ export function ScriptCard(props: ScriptCardProps) {
               void run(() => props.onToggle(next));
             }}
           />
-          <span className="card-name">{script.name}</span>
+          <span className="card-name" title={script.name}>
+            {script.name}
+          </span>
         </label>
         <span className={`badge badge-${script.kind}`}>{script.kind.toUpperCase()}</span>
         {script.trial && (
@@ -144,7 +146,7 @@ export function ScriptCard(props: ScriptCardProps) {
           </button>
           {ui.confirmDelete ? (
             <span className="confirm">
-              <span>Delete this script?</span>
+              <span>Delete?</span>
               <button
                 type="button"
                 className="btn btn-small btn-danger"

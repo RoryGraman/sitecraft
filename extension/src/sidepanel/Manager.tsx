@@ -231,19 +231,32 @@ export function Manager({ bridge, state, page, onModify, onState }: ManagerProps
           {shown.length} {shown.length === 1 ? 'script' : 'scripts'}
         </span>
         <span className="spacer" />
-        <button type="button" className="btn btn-small" data-testid="export-button" onClick={() => void doExport()}>
-          Export
+        <button
+          type="button"
+          className="btn btn-small btn-icon"
+          data-testid="export-button"
+          title="Export scripts"
+          aria-label="Export scripts"
+          onClick={() => void doExport()}
+        >
+          <svg viewBox="0 -960 960 960" aria-hidden="true">
+            <path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
+          </svg>
         </button>
         <button
           type="button"
-          className="btn btn-small"
+          className="btn btn-small btn-icon"
           data-testid="import-button"
+          title="Import scripts"
+          aria-label="Import scripts"
           onClick={() => {
             setPanelError(null);
             setPanel((p) => (p === 'import' ? 'none' : 'import'));
           }}
         >
-          Import
+          <svg viewBox="0 -960 960 960" aria-hidden="true">
+            <path d="M440-320v-326L336-542l-56-58 200-200 200 200-56 58-104-104v326h-80ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z" />
+          </svg>
         </button>
       </div>
 

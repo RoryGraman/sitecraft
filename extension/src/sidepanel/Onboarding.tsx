@@ -148,7 +148,9 @@ export function Onboarding(props: OnboardingProps) {
   return (
     <div className="onboarding">
       <h2 className="ob-title">Set up Sitecraft</h2>
-      <p className="muted">Three things need to be in place. Checks run every 2 seconds.</p>
+      <p className="muted">
+        Three things need to be in place. Checks run every 2 seconds. Tip: <code>./setup</code> in the repo automates them.
+      </p>
 
       <Row
         testId="onboarding-userscripts"

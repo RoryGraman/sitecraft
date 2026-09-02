@@ -4,9 +4,9 @@
  *   ./setup            (from the repository root)
  *
  * Installs dependencies, builds the project, installs the companion, checks
- * the Claude login, then guides and WATCHES the two Chrome steps that no
- * script can do: Load unpacked, and Allow User Scripts. Both are detected
- * live from the browser profile, so the wizard confirms each as you do it.
+ * the Claude login, then guides the two Chrome steps that no script can do:
+ * Load unpacked, and Allow User Scripts. You do each step in the browser and
+ * press Enter; the wizard reads the browser profile to confirm it.
  *
  * Safe to run again at any time. Finished steps are detected and skipped.
  * No dependencies: this file runs before `pnpm install`.
@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
+import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import {
   BROWSER_APPS,
@@ -36,13 +36,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'extension', 'dist');
 const CLI = path.join(ROOT, 'companion', 'bin', 'sitecraft.js');
 
-function envInt(raw, fallback) {
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
-const POLL_MS = envInt(process.env.SITECRAFT_SETUP_POLL_MS, 2000);
-const WAIT_MS = envInt(process.env.SITECRAFT_SETUP_WAIT_MS, 300_000);
 const MAX_BUFFER = 64 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
@@ -151,25 +144,59 @@ function copyToClipboard(text) {
   return tryRun(cmd[0], cmd.slice(1), text) !== null;
 }
 
-/** Wait until check() returns a truthy state. Shows a live spinner line. */
-async function waitFor(message, check) {
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  const started = Date.now();
-  let i = 0;
-  for (;;) {
-    const state = check();
-    if (state) {
-      if (tty) process.stdout.write('\r[2K');
-      return state;
-    }
-    if (Date.now() - started > WAIT_MS) {
-      if (tty) process.stdout.write('\r[2K');
-      return null;
-    }
-    const elapsed = Math.round((Date.now() - started) / 1000);
-    if (tty) process.stdout.write(`\r  ${cyan(frames[i++ % frames.length])} ${message} ${dim(`(${elapsed}s)`)}`);
-    await sleep(POLL_MS);
+// One shared reader for the whole run. `stdinEnded` guards against a closed
+// stream (Ctrl+D, or a piped EOF): once closed, every read returns null at
+// once, so a retry loop bails instead of spinning on empty input.
+let reader = null;
+let stdinEnded = false;
+
+function getReader() {
+  if (!reader) {
+    reader = readline.createInterface({ input: process.stdin, output: process.stdout });
+    reader.on('close', () => {
+      stdinEnded = true;
+    });
   }
+  return reader;
+}
+
+/** Read one line. Returns the trimmed text, or null when stdin has closed. */
+async function prompt(question) {
+  if (stdinEnded) return null;
+  try {
+    return (await getReader().question(question)).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Confirm a manual step. The user does it in the browser, then presses Enter
+ * and the wizard checks the profile. On a miss it shows `fail` and asks again.
+ * Typing "skip" bails out. With no interactive input (piped stdin, CI, or a
+ * closed stream) it stops instead of blocking or spinning.
+ * Returns the state on success, 'skipped' if the user skips, null otherwise.
+ */
+async function confirmWhenReady(check, { instruction, fail }) {
+  let state = check();
+  if (state) return state;
+  if (!process.stdin.isTTY) return null;
+  for (;;) {
+    const answer = await prompt(instruction);
+    if (answer === null) return null;
+    const choice = answer.toLowerCase();
+    if (choice === 'skip' || choice === 's') return 'skipped';
+    state = check();
+    if (state) return state;
+    out(`  ${yellow('•')} ${fail}`);
+  }
+}
+
+/** How the loaded copy relates to this checkout's dist. */
+function distStatus(state) {
+  if (!state.installed) return 'absent';
+  if (state.path === null) return 'unknown';
+  return pathMatchesDist(state.path, DIST) ? 'match' : 'mismatch';
 }
 
 // ---------------------------------------------------------------------------
@@ -252,32 +279,34 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     return false;
   }
 
-  // Step A: the extension is loaded from this checkout.
-  if (state.installed && !pathMatchesDist(state.path, DIST)) {
-    out(`${yellow('•')} Sitecraft is loaded from another folder:`);
-    out(dim(`    ${state.path ?? 'unknown'}`));
+  // Step A: the extension is loaded from this checkout. A copy loaded from a
+  // different folder is a real mismatch; a load Chrome has not yet flushed to
+  // disk reads as 'unknown', which the Enter check tolerates.
+  const loadCheck = () => {
+    const s = scan(browser);
+    const st = distStatus(s);
+    return st === 'match' || st === 'unknown' ? s : null;
+  };
+  if (!loadCheck()) {
+    if (distStatus(state) === 'mismatch') {
+      out(`${yellow('•')} Sitecraft is loaded from another folder:`);
+      out(dim(`    ${state.path}`));
+      out(`  ${DOT} Remove that copy first, then load this one:`);
+    } else {
+      out('  In the browser:');
+      out(`    1. Turn on ${bold('Developer mode')} (top right of the extensions page).`);
+      out(`    2. Click ${bold('Load unpacked')} and choose:`);
+    }
     const copied = copyToClipboard(DIST);
-    out(`  ${DOT} Remove that copy on the extensions page, then click ${bold('Load unpacked')} and choose:`);
     out(`       ${cyan(DIST)}`);
     if (copied) out(dim('       The path is on your clipboard. In the picker press Cmd+Shift+G and paste.'));
     openPage(browser, EXTENSIONS_URL, noOpen);
-  }
-  if (!state.installed) {
-    const copied = copyToClipboard(DIST);
-    out('  In the browser:');
-    out(`    1. Turn on ${bold('Developer mode')} (top right of the extensions page).`);
-    out(`    2. Click ${bold('Load unpacked')} and choose:`);
-    out(`       ${cyan(DIST)}`);
-    if (copied) out(dim(`       The path is on your clipboard. In the picker press Cmd+Shift+G and paste.`));
-    openPage(browser, EXTENSIONS_URL, noOpen);
-  }
-  if (!state.installed || !pathMatchesDist(state.path, DIST)) {
-    const found = await waitFor('Waiting for the extension to appear...', () => {
-      const s = scan(browser);
-      return s.installed && pathMatchesDist(s.path, DIST) ? s : null;
+    const found = await confirmWhenReady(loadCheck, {
+      instruction: `  ${DOT} Press Enter once it shows in the list (or type "skip"): `,
+      fail: 'I could not find the extension. Load it once more, then press Enter.',
     });
-    if (!found) {
-      out(`${yellow('•')} Still not loaded. Finish the step, then run ${cyan('./setup')} again.`);
+    if (!found || found === 'skipped') {
+      out(`${yellow('•')} Not loaded yet. Load it, then run ${cyan('./setup')} again.`);
       return false;
     }
     state = found;
@@ -285,15 +314,19 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
   out(`${OK} Extension loaded ${dim(`(profile: ${state.profile})`)}`);
 
   // Step B: the Allow User Scripts toggle.
-  if (!state.userScriptsEnabled) {
+  const toggleCheck = () => {
+    const s = scan(browser);
+    return s.userScriptsEnabled ? s : null;
+  };
+  if (!toggleCheck()) {
     out(`  One switch left: turn on ${bold('Allow User Scripts')}.`);
     openPage(browser, DETAILS_URL, noOpen);
-    const found = await waitFor('Waiting for the switch...', () => {
-      const s = scan(browser);
-      return s.userScriptsEnabled ? s : null;
+    const found = await confirmWhenReady(toggleCheck, {
+      instruction: `  ${DOT} Press Enter once the switch is on (or type "skip"): `,
+      fail: 'The switch still reads off. Turn it on, then press Enter.',
     });
-    if (!found) {
-      out(`${yellow('•')} The switch is still off. Turn it on, then run ${cyan('./setup')} again.`);
+    if (!found || found === 'skipped') {
+      out(`${yellow('•')} Still off. Turn it on, then run ${cyan('./setup')} again.`);
       return false;
     }
   }

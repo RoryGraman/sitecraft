@@ -1,5 +1,7 @@
 # Sitecraft
 
+> Fast path: run `./setup` at the repository root. It automates every step a script can do and watches the manual Chrome steps.
+
 Sitecraft is a Chrome extension that customizes websites from plain language. You open the side panel on any page and type a request, such as "hide the promo banner". A Claude agent reads a trimmed copy of the page, writes a small CSS rule or JS snippet, and the extension saves it. The script runs on every later visit to matching pages. You can keep it, undo it, edit it, or ask for changes in the same chat.
 
 Every customization lives in your browser's local storage. The AI part runs in a small Node program on your machine, the companion, which reuses your Claude Code login. There are no accounts, no analytics, and no remote storage. The only outside traffic is the agent call to Anthropic.

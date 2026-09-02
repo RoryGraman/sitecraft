@@ -34,6 +34,18 @@ Two parts talk over Chrome native messaging.
 - The content script injects saved CSS at `document_start`. Saved JS runs through `chrome.userScripts` in the page's MAIN world.
 - The companion speaks only over stdin and stdout. It opens no network port. It runs the Claude Agent SDK with one tool, `inspect_page`, which reads live page elements on request.
 
+## Quick start
+
+```sh
+git clone https://github.com/RoryGraman/sitecraft
+cd sitecraft
+./setup
+```
+
+The wizard does everything a script can do: it checks your tools, builds the project, installs the companion, and checks your Claude login. Then it opens the right Chrome pages and watches your browser. It confirms each manual step live as you do it. Only the browser steps stay manual, because Chrome requires a human for them: turn on **Developer mode** once, click **Load unpacked**, and turn on **Allow User Scripts**.
+
+Run `./setup` again at any time. It is safe to re-run: the build steps re-run quickly, and finished Chrome steps are skipped. `./setup --help` lists the options (`--browser brave`, `--skip-login`, `--uninstall`, and more).
+
 ## Requirements
 
 - Google Chrome 120 or newer. Chrome 138 or newer is the tested path.
@@ -42,9 +54,9 @@ Two parts talk over Chrome native messaging.
 - A Claude Code login on this machine. Install Claude Code, run `claude` in a terminal, and sign in once. Agent runs bill to that subscription.
 - macOS or Linux. Windows is not supported yet.
 
-## Setup
+## Manual setup
 
-The steps below build the project, load the extension, and install the companion. Run every command from the repository root.
+`./setup` does all of the steps below for you. Use this path when you want each step by hand. Run every command from the repository root.
 
 ### 1. Build
 

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Sitecraft one-command setup. See README.md.
+SELF="$0"
+if command -v realpath >/dev/null 2>&1; then SELF="$(realpath "$0")"; fi
+cd "$(dirname "$SELF")" || exit 1
+exec node scripts/setup.mjs "$@"

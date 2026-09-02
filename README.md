@@ -42,7 +42,7 @@ cd sitecraft
 ./setup
 ```
 
-The wizard does everything a script can do: it checks your tools, builds the project, installs the companion, and checks your Claude login. Then it opens the right Chrome pages and watches your browser. It confirms each manual step live as you do it. Only the browser steps stay manual, because Chrome requires a human for them: turn on **Developer mode** once, click **Load unpacked**, and turn on **Allow User Scripts**.
+The wizard does everything a script can do: it checks your tools, builds the project, installs the companion, and checks your Claude login. Then it opens the right Chrome pages and watches your browser. It confirms each manual step live as you do it. Only the browser steps stay manual, because Chrome requires a human for them: turn on **Developer mode** once, click **Load unpacked**, turn on **Allow User Scripts**, and click **Update** to restart the extension.
 
 Run `./setup` again at any time. It is safe to re-run: the build steps re-run quickly, and finished Chrome steps are skipped. `./setup --help` lists the options (`--browser brave`, `--skip-login`, `--uninstall`, and more).
 
@@ -83,6 +83,7 @@ This is the production build. No web page can connect to the extension.
 
 1. Open `chrome://extensions/?id=hoadedohbfjjmkajibiafgoajoicjdba`.
 2. Turn on the **Allow User Scripts** switch.
+3. Click **Update** at the top of `chrome://extensions` (or the reload icon on the Sitecraft card). The switch alone does not restart the extension; the reload does, and Sitecraft registers your scripts on that restart.
 
 This per-extension switch lets `chrome.userScripts` run saved code, even on sites with a strict content security policy. On Chrome 120 to 137 the switch does not exist; keep Developer mode on instead.
 

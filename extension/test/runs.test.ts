@@ -10,6 +10,7 @@ import {
   inspectInTab,
   isSupportedPageUrl,
   syncUserScripts,
+  syncUserScriptsIfEmpty,
   takeSnapshotFromTab,
 } from '../src/background/runs';
 import { FakeStorageArea, fakeNative, mkScript, resetIds, tick } from './router.fakes';
@@ -537,5 +538,51 @@ describe('inspectInTab', () => {
     expect(text).toContain('<b></b>');
     const injection = executeScript.mock.calls[0]?.[0] as unknown as { args: unknown[] };
     expect(injection.args).toEqual(['b', INSPECT_MAX_CHARS]);
+  });
+});
+
+describe('syncUserScriptsIfEmpty', () => {
+  function fixture(scripts: SiteScript[]) {
+    const area = new FakeStorageArea();
+    area.data.scripts = scripts;
+    const store = createStateStore(area.asArea());
+    const register = vi.fn<(s: SiteScript[]) => Promise<RegisterAllResult>>(async () => ({ registered: 1, skipped: false }));
+    return { store, register };
+  }
+
+  it('registers stored scripts when Chrome holds none', async () => {
+    const script = mkScript({ urlPattern: 'https://www.youtube.com/*', kind: 'js' });
+    const { store, register } = fixture([script]);
+    const probe = { isAvailable: () => true, getScripts: async () => [] };
+    const res = await syncUserScriptsIfEmpty(store, register, probe);
+    expect(res).not.toBeNull();
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(register.mock.calls[0]?.[0].map((s) => s.id)).toEqual([script.id]);
+  });
+
+  it('does nothing when Chrome already holds registrations', async () => {
+    const { store, register } = fixture([mkScript({ kind: 'js' })]);
+    const probe = { isAvailable: () => true, getScripts: async () => [{ id: 'bundle-1' }] };
+    expect(await syncUserScriptsIfEmpty(store, register, probe)).toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when user scripts are unavailable', async () => {
+    const { store, register } = fixture([mkScript({ kind: 'js' })]);
+    const probe = { isAvailable: () => false, getScripts: async () => [] };
+    expect(await syncUserScriptsIfEmpty(store, register, probe)).toBeNull();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when getScripts throws', async () => {
+    const { store, register } = fixture([mkScript({ kind: 'js' })]);
+    const probe = {
+      isAvailable: () => true,
+      getScripts: async () => {
+        throw new Error('boom');
+      },
+    };
+    expect(await syncUserScriptsIfEmpty(store, register, probe)).toBeNull();
+    expect(register).not.toHaveBeenCalled();
   });
 });

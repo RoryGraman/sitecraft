@@ -9,7 +9,7 @@ import { SIDEBAR_PORT_NAME, type SidebarEvent } from '@sitecraft/shared';
 import { installCssFallback } from './css';
 import { createNativeClient } from './native';
 import { createRouter, installScriptErrorHandler, isAllowedExternalOrigin, type RouterDeps } from './router';
-import { createRunManager, reloadTab, syncUserScripts, takeSnapshotFromTab } from './runs';
+import { createRunManager, reloadTab, syncUserScripts, syncUserScriptsIfEmpty, takeSnapshotFromTab } from './runs';
 import { createStateStore } from './state';
 import { createTabWatcher } from './tabs';
 import { isUserScriptsAvailable, registerAll } from './userScripts';
@@ -78,6 +78,16 @@ chrome.runtime.onStartup.addListener(() => {
   resync('startup');
   announce();
 });
+
+// The worker also restarts when the user turns on "Allow User Scripts", which
+// fires neither event above. Re-register then, if Chrome holds no scripts, so
+// a suppressed script starts working without re-running setup. Announce too,
+// so the setup wizard sees the switch is now on.
+syncUserScriptsIfEmpty(store, registerAll)
+  .then((res) => {
+    if (res) announce();
+  })
+  .catch((e: unknown) => console.warn('Sitecraft: user script re-check on worker start failed', e));
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e: unknown) => {
   console.error('Sitecraft: could not set the side panel behavior', e);

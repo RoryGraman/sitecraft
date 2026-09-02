@@ -159,7 +159,10 @@ export function Onboarding(props: OnboardingProps) {
         state={userScriptsState}
         statusText={status ? (status.userScriptsEnabled ? 'Enabled' : 'Off') : 'Checking'}
       >
-        <p>Open the extension details page. Turn on "Allow User Scripts". Chrome 138 and newer needs this switch.</p>
+        <p>
+          Open the extension details page. Turn on "Allow User Scripts". Then click "Update" at the top of chrome://extensions, so the
+          extension restarts and registers your scripts. Chrome 138 and newer needs this switch.
+        </p>
         <button type="button" className="btn btn-small" onClick={openDetails}>
           Open extension details
         </button>

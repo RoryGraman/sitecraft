@@ -22,6 +22,7 @@ import { newId, nowIso } from '../lib/ids';
 import { elementOuterHtmlInPage, snapshotInPage, type PageInspectResult } from '../content/snapshot';
 import type { NativeClient } from './native';
 import type { StateStore } from './state';
+import { isUserScriptsAvailable } from './userScripts';
 import type { RegisterAllResult, registerAll } from './userScripts';
 
 export type RegisterAllFn = typeof registerAll;
@@ -107,6 +108,44 @@ export async function syncUserScripts(
   });
   await Promise.all(writes);
   return { ...result, failed };
+}
+
+/** How syncUserScriptsIfEmpty inspects the current registrations. Injectable for tests. */
+export interface UserScriptsProbe {
+  isAvailable(): boolean;
+  getScripts(): Promise<{ id: string }[]>;
+}
+
+const defaultProbe: UserScriptsProbe = {
+  isAvailable: isUserScriptsAvailable,
+  getScripts: () => chrome.userScripts.getScripts(),
+};
+
+/**
+ * Re-register the stored scripts when the worker starts and Chrome holds no
+ * registrations. Turning "Allow User Scripts" on reloads the extension but
+ * fires neither onInstalled nor onStartup, so without this a script the toggle
+ * had suppressed stays dead until a full browser restart. It also covers a
+ * restart where the toggle reset off and the user turns it back on.
+ *
+ * Does nothing when user scripts are unavailable (toggle off) or when Chrome
+ * still holds the persistent registrations, so it never churns a working page.
+ * Returns the sync result, or null when it did nothing.
+ */
+export async function syncUserScriptsIfEmpty(
+  store: StateStore,
+  register: RegisterAllFn,
+  probe: UserScriptsProbe = defaultProbe,
+): Promise<SyncResult | null> {
+  if (!probe.isAvailable()) return null;
+  let existing: { id: string }[];
+  try {
+    existing = await probe.getScripts();
+  } catch {
+    return null;
+  }
+  if (existing.length > 0) return null;
+  return syncUserScripts(store, register);
 }
 
 // ---------------------------------------------------------------------------

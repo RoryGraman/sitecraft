@@ -70,6 +70,11 @@ function heading(n, title) {
   out(bold(`${n}. ${title}`));
 }
 
+/** Blank lines that set a call to action apart from the log above it. */
+function gap(lines = 8) {
+  for (let i = 0; i < lines; i++) out();
+}
+
 function fatal(message, ...help) {
   out(`${BAD} ${message}`);
   for (const h of help) out(`  ${h}`);
@@ -305,6 +310,7 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
   };
   let loaded = loadCheck();
   if (!loaded) {
+    gap();
     if (distStatus(state) === 'mismatch') {
       out(`${yellow('•')} Chrome lists a Sitecraft loaded from another folder:`);
       out(dim(`    ${state.path}`));
@@ -319,8 +325,8 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     if (copied) out(dim('       The path is on your clipboard. In the picker press Cmd+Shift+G and paste.'));
     openPage(browser, EXTENSIONS_URL, noOpen);
     const found = await confirmWhenReady(loadCheck, {
-      instruction: `  ${DOT} Press Enter once it shows in the list (or type "go" to continue): `,
-      fail: 'Not announced yet. Check it shows in the list, then press Enter again, or type "go".',
+      instruction: `\n\n  ${DOT} Press Enter once it shows in the list (or type "go" to continue): `,
+      fail: '\nNot announced yet. Check it shows in the list, then press Enter again, or type "go".',
     });
     if (!found || found === 'skipped') {
       out(`${yellow('•')} Not confirmed. The panel checklist will confirm it.`);
@@ -338,12 +344,15 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     return s.userScriptsEnabled ? s : null;
   };
   if (!toggleCheck()) {
-    out(`  One switch left: turn on ${bold('Allow User Scripts')}.`);
-    out(dim('  Then click the Sitecraft toolbar icon once, so the extension reports the switch.'));
+    gap();
+    out('  In the browser:');
+    out(`    1. Turn on ${bold('Allow User Scripts')} on the page I opened.`);
+    out(`    2. Click ${bold('Update')} at the top of the extensions page (or the reload icon on the Sitecraft card).`);
+    out(dim('       The switch alone does not restart the extension. Update does, and the restart reports the switch.'));
     openPage(browser, DETAILS_URL, noOpen);
     const found = await confirmWhenReady(toggleCheck, {
-      instruction: `  ${DOT} Press Enter once the switch is on (or type "go" to continue): `,
-      fail: 'The switch still reads off. Turn it on, click the Sitecraft icon once, then press Enter. Or type "go".',
+      instruction: `\n\n  ${DOT} Press Enter once you clicked Update (or type "go" to continue): `,
+      fail: '\nThe switch still reads off. Turn it on, click Update at the top of the page, then press Enter. Or type "go".',
     });
     if (!found || found === 'skipped') {
       out(`${yellow('•')} Not confirmed. The panel checklist will confirm it.`);
@@ -356,7 +365,7 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
 
 function summary(state) {
   const done = state === true;
-  out();
+  gap(6);
   if (state === 'skipped') {
     out(bold('Terminal setup is done.'));
     out('  Finish the Chrome steps above. The side panel shows a live checklist.');

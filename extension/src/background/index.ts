@@ -15,7 +15,12 @@ import { createTabWatcher } from './tabs';
 import { isUserScriptsAvailable, registerAll } from './userScripts';
 
 const store = createStateStore();
-const native = createNativeClient();
+// Each ping tells the companion which build is loaded and whether user
+// scripts are allowed. The companion records it for the setup wizard.
+const native = createNativeClient(undefined, undefined, () => ({
+  version: chrome.runtime.getManifest().version,
+  userScriptsEnabled: isUserScriptsAvailable(),
+}));
 
 // The run manager emits through the router, which is created after it.
 let broadcast: (ev: SidebarEvent) => void = () => undefined;
@@ -58,9 +63,21 @@ function resync(reason: string): void {
   });
 }
 
-// Registered user scripts are cleared on extension update. Re-register.
-chrome.runtime.onInstalled.addListener(() => resync('install'));
-chrome.runtime.onStartup.addListener(() => resync('startup'));
+/** Ping the companion so it records that this build is loaded. Failing is normal before setup. */
+function announce(): void {
+  void native.ping();
+}
+
+// Registered user scripts are cleared on extension update. Re-register, and
+// announce this build to the companion.
+chrome.runtime.onInstalled.addListener(() => {
+  resync('install');
+  announce();
+});
+chrome.runtime.onStartup.addListener(() => {
+  resync('startup');
+  announce();
+});
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e: unknown) => {
   console.error('Sitecraft: could not set the side panel behavior', e);

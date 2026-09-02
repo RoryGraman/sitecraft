@@ -361,3 +361,30 @@ describe('startHost', () => {
     expect(h.received).toEqual([]);
   });
 });
+
+describe('host: extension hello', () => {
+  it('hands a valid hello to onHello and ignores a bare or malformed ping', async () => {
+    const onHello = vi.fn();
+    const h = makeHost({ onHello });
+    h.send({ type: 'ping', requestId: 'h1', extension: { version: '0.1.0', userScriptsEnabled: true } });
+    await h.waitFor(isType('pong', 'h1'));
+    expect(onHello).toHaveBeenCalledWith({ version: '0.1.0', userScriptsEnabled: true });
+
+    h.send({ type: 'ping', requestId: 'h2' });
+    await h.waitFor(isType('pong', 'h2'));
+    h.send({ type: 'ping', requestId: 'h3', extension: { version: 1, userScriptsEnabled: 'yes' } });
+    await h.waitFor(isType('pong', 'h3'));
+    expect(onHello).toHaveBeenCalledTimes(1);
+  });
+
+  it('still answers pong when onHello throws', async () => {
+    const h = makeHost({
+      onHello: () => {
+        throw new Error('disk full');
+      },
+    });
+    h.send({ type: 'ping', requestId: 'h4', extension: { version: '0.1.0', userScriptsEnabled: false } });
+    const pong = await h.waitFor(isType('pong', 'h4'));
+    expect(pong.type).toBe('pong');
+  });
+});

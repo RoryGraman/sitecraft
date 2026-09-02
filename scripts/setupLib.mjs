@@ -88,6 +88,29 @@ export function scanBrowserForExtension(dataDir, fs, distPath) {
   return { browserFound: true, installed: false, path: null, userScriptsEnabled: false, profile: null };
 }
 
+/** File under ~/.sitecraft that the companion writes on each extension ping. */
+export const EXTENSION_RECORD_FILE = 'extension.json';
+
+/** Parse the companion's extension record. Null when missing or malformed. */
+export function readExtensionRecord(text) {
+  if (typeof text !== 'string') return null;
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!data || typeof data !== 'object') return null;
+  if (typeof data.at !== 'string' || Number.isNaN(Date.parse(data.at))) return null;
+  if (typeof data.version !== 'string' || typeof data.userScriptsEnabled !== 'boolean') return null;
+  return { at: data.at, version: data.version, userScriptsEnabled: data.userScriptsEnabled };
+}
+
+/** True when the record was written at or after `sinceMs` (2 s tolerance). */
+export function recordIsFresh(record, sinceMs) {
+  return record !== null && Date.parse(record.at) >= sinceMs - 2000;
+}
+
 /** True when Chrome loads the extension from this checkout's dist. */
 export function pathMatchesDist(loadedPath, distPath) {
   if (typeof loadedPath !== 'string' || loadedPath === '') return false;

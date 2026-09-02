@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { NATIVE_MAX_MESSAGE_BYTES } from '@sitecraft/shared';
-import type { AgentRequest, HostInbound, HostOutbound } from '@sitecraft/shared';
+import type { AgentRequest, ExtensionHello, HostInbound, HostOutbound } from '@sitecraft/shared';
 import type { AgentHooks, AgentRunOptions, RunAgentFn } from './agent.js';
 import { FrameParser, FrameTooLargeError, encodeJsonFrame } from './framing.js';
 import { nullLogger, type Logger } from './log.js';
@@ -34,6 +34,8 @@ export interface HostDeps {
   inspectTimeoutMs?: number;
   /** How long checkAuth may take. Default 60 s. */
   authTimeoutMs?: number;
+  /** Called with what the extension reports about itself on each ping. */
+  onHello?(hello: ExtensionHello): void;
 }
 
 export interface HostHandle {
@@ -81,6 +83,12 @@ function isAgentRequest(v: unknown): v is AgentRequest {
     (v.model === undefined || typeof v.model === 'string') &&
     Array.isArray(v.existingScripts)
   );
+}
+
+/** The extension's self-report on a ping, or null when absent or malformed. */
+function readHello(v: unknown): ExtensionHello | null {
+  if (!isRecord(v) || typeof v.version !== 'string' || typeof v.userScriptsEnabled !== 'boolean') return null;
+  return { version: v.version, userScriptsEnabled: v.userScriptsEnabled };
 }
 
 function errorMessage(err: unknown): string {
@@ -255,9 +263,18 @@ export function startHost(io: HostIo, deps: HostDeps): HostHandle {
       return;
     }
     switch (raw.type) {
-      case 'ping':
+      case 'ping': {
+        const hello = readHello((raw as { extension?: unknown }).extension);
+        if (hello && deps.onHello) {
+          try {
+            deps.onHello(hello);
+          } catch (err) {
+            log.warn('onHello failed', errorMessage(err));
+          }
+        }
         writeFrame({ type: 'pong', requestId: raw.requestId, companionVersion: deps.version, node: process.version });
         return;
+      }
       case 'checkAuth':
         void handleCheckAuth(raw.requestId);
         return;

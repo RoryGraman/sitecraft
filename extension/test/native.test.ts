@@ -213,6 +213,18 @@ describe('createNativeClient: ping', () => {
     expect(client.status()).toMatchObject({ state: 'connected', companionVersion: '0.1.0' });
   });
 
+  it('attaches the extension hello to the ping when a provider is given', () => {
+    const ports: FakePort[] = [];
+    const connect = vi.fn((_name: string) => {
+      const fp = makeFakePort();
+      ports.push(fp);
+      return fp.port;
+    });
+    const client = createNativeClient('x', connect, () => ({ version: '0.1.0', userScriptsEnabled: true }));
+    void client.ping();
+    expect(ports[0]!.last()).toMatchObject({ type: 'ping', extension: { version: '0.1.0', userScriptsEnabled: true } });
+  });
+
   it('notifies onStatus listeners and supports unsubscribe', async () => {
     const { client, port } = setup();
     const cb = vi.fn();

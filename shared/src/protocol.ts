@@ -186,9 +186,20 @@ export interface AgentRequest {
   model?: string;
 }
 
+/** What the extension reports about itself with each ping. */
+export interface ExtensionHello {
+  version: string;
+  userScriptsEnabled: boolean;
+}
+
 /** Extension -> Companion */
 export type HostInbound =
-  | { type: 'ping'; requestId: string }
+  | {
+      type: 'ping';
+      requestId: string;
+      /** The companion records this to disk, so the setup wizard can see the extension is loaded. */
+      extension?: ExtensionHello;
+    }
   | { type: 'checkAuth'; requestId: string }
   | { type: 'run'; requestId: string; payload: AgentRequest }
   | { type: 'cancel'; requestId: string }

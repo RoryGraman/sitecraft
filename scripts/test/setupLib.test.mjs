@@ -10,7 +10,9 @@ import {
   openUrlCommand,
   parseSetupArgs,
   pathMatchesDist,
+  readExtensionRecord,
   readProfileExtensionState,
+  recordIsFresh,
   scanBrowserForExtension,
 } from '../setupLib.mjs';
 
@@ -189,5 +191,32 @@ describe('platform commands', () => {
     expect(browserDataDir('edge', '/home/u', 'linux')).toBe('/home/u/.config/microsoft-edge');
     expect(browserDataDir('chrome', '/home/u', 'win32')).toBeNull();
     expect(Object.keys(BROWSER_APPS)).toEqual(['chrome', 'brave', 'edge']);
+  });
+});
+
+describe('extension record', () => {
+  const at = '2026-09-01T12:00:00.000Z';
+
+  it('parses a valid record and drops extra fields', () => {
+    const text = JSON.stringify({ at, version: '0.1.0', userScriptsEnabled: true, companionVersion: '0.1.0' });
+    expect(readExtensionRecord(text)).toEqual({ at, version: '0.1.0', userScriptsEnabled: true });
+  });
+
+  it('rejects missing, unparsable, and malformed records', () => {
+    expect(readExtensionRecord(null)).toBeNull();
+    expect(readExtensionRecord('nope')).toBeNull();
+    expect(readExtensionRecord('[]')).toBeNull();
+    expect(readExtensionRecord(JSON.stringify({ at: 'bad', version: '0.1.0', userScriptsEnabled: true }))).toBeNull();
+    expect(readExtensionRecord(JSON.stringify({ at, version: '0.1.0' }))).toBeNull();
+    expect(readExtensionRecord(JSON.stringify({ at, version: 1, userScriptsEnabled: true }))).toBeNull();
+  });
+
+  it('is fresh only at or after the start time, with a 2 s tolerance', () => {
+    const rec = { at, version: '0.1.0', userScriptsEnabled: true };
+    const t = Date.parse(at);
+    expect(recordIsFresh(rec, t)).toBe(true);
+    expect(recordIsFresh(rec, t + 1500)).toBe(true);
+    expect(recordIsFresh(rec, t + 5000)).toBe(false);
+    expect(recordIsFresh(null, t)).toBe(false);
   });
 });

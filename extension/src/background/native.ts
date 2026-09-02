@@ -11,6 +11,7 @@ import type {
   AgentRequest,
   AgentScriptOutput,
   CompanionStatus,
+  ExtensionHello,
   HostInbound,
   HostOutbound,
 } from '@sitecraft/shared';
@@ -112,6 +113,8 @@ function readLastErrorMessage(): string | undefined {
 export function createNativeClient(
   hostName: string = NATIVE_HOST_NAME,
   connect: NativeConnect = (n) => chrome.runtime.connectNative(n),
+  /** What to report about the extension with each ping. Omit to send a bare ping. */
+  hello?: () => ExtensionHello,
 ): NativeClient {
   let port: chrome.runtime.Port | null = null;
   let status: CompanionStatus = { state: 'unknown' };
@@ -340,8 +343,9 @@ export function createNativeClient(
 
   async function ping(timeoutMs: number = PING_TIMEOUT_MS): Promise<CompanionStatus> {
     const requestId = crypto.randomUUID();
+    const msg: HostInbound = hello ? { type: 'ping', requestId, extension: hello() } : { type: 'ping', requestId };
     try {
-      await request({ type: 'ping', requestId }, timeoutMs);
+      await request(msg, timeoutMs);
     } catch (e) {
       if (!(e instanceof DisconnectError)) {
         // Timed out or could not connect. Drop the port so a retry starts a

@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { EXTENSION_ID } from '@sitecraft/shared';
 import pkg from '../package.json';
 import { checkClaudeLogin, runAgent, type AgentRunOptions } from './agent.js';
+import { writeExtensionRecord } from './hello.js';
 import { startHost } from './host.js';
 import {
   BROWSER_IDS,
@@ -196,6 +197,11 @@ async function cmdHost(origin: string | undefined): Promise<number> {
       version: VERSION,
       logger,
       agentOptions,
+      onHello: (hello) => {
+        writeExtensionRecord(os.homedir(), hello, VERSION).catch((e: unknown) => {
+          logger.warn('Could not record the extension hello', messageOf(e));
+        });
+      },
     },
   );
 

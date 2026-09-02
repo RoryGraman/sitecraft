@@ -21,6 +21,7 @@ import {
   BROWSER_APPS,
   DETAILS_URL,
   EXTENSIONS_URL,
+  EXTENSION_RECORD_FILE,
   NODE_MIN_MAJOR,
   USAGE,
   browserDataDir,
@@ -29,12 +30,17 @@ import {
   openUrlCommand,
   parseSetupArgs,
   pathMatchesDist,
+  readExtensionRecord,
+  recordIsFresh,
   scanBrowserForExtension,
 } from './setupLib.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'extension', 'dist');
 const CLI = path.join(ROOT, 'companion', 'bin', 'sitecraft.js');
+const STARTED = Date.now();
+/** The companion writes this when the extension pings it. Env override for tests. */
+const RECORD = process.env.SITECRAFT_SETUP_RECORD ?? path.join(os.homedir(), '.sitecraft', EXTENSION_RECORD_FILE);
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -123,6 +129,12 @@ function scan(browser) {
   const dir = dataDirFor(browser);
   if (dir === null) return { browserFound: false, installed: false, path: null, userScriptsEnabled: false, profile: null };
   return scanBrowserForExtension(dir, realFs, DIST);
+}
+
+/** The extension's latest hello, if the companion recorded one during this run. */
+function freshRecord() {
+  const rec = readExtensionRecord(realFs.readFile(RECORD));
+  return rec && recordIsFresh(rec, STARTED) ? rec : null;
 }
 
 function openPage(browser, url, noOpen) {
@@ -279,16 +291,20 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     return false;
   }
 
-  // Chrome writes its preferences file lazily, in both directions. So these
-  // two checks are advisory: a confirmed match is reported, and anything else
-  // hands the final check to the panel, which reads Chrome's live state.
+  // Two signals, in order of trust. First: the record the companion writes
+  // when the extension pings it (on load, and each time the panel opens).
+  // Second: Chrome's preferences file, which is written lazily in both
+  // directions. Both are advisory; the panel checklist is the final check.
 
   // Step A: the extension is loaded from this checkout.
   const loadCheck = () => {
+    const rec = freshRecord();
+    if (rec) return { source: 'companion', profile: null, userScriptsEnabled: rec.userScriptsEnabled };
     const s = scan(browser);
-    return distStatus(s) === 'match' ? s : null;
+    return distStatus(s) === 'match' ? { ...s, source: 'profile' } : null;
   };
-  if (!loadCheck()) {
+  let loaded = loadCheck();
+  if (!loaded) {
     if (distStatus(state) === 'mismatch') {
       out(`${yellow('•')} Chrome lists a Sitecraft loaded from another folder:`);
       out(dim(`    ${state.path}`));
@@ -304,30 +320,33 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     openPage(browser, EXTENSIONS_URL, noOpen);
     const found = await confirmWhenReady(loadCheck, {
       instruction: `  ${DOT} Press Enter once it shows in the list (or type "go" to continue): `,
-      fail: 'Not found on disk yet. Chrome saves this lazily. Press Enter to check again, or type "go".',
+      fail: 'Not announced yet. Check it shows in the list, then press Enter again, or type "go".',
     });
     if (!found || found === 'skipped') {
-      out(`${yellow('•')} Not confirmed from disk. The panel checklist will confirm it.`);
+      out(`${yellow('•')} Not confirmed. The panel checklist will confirm it.`);
       return 'unconfirmed';
     }
-    state = found;
+    loaded = found;
   }
-  out(`${OK} Extension loaded ${dim(`(profile: ${state.profile})`)}`);
+  out(`${OK} Extension loaded ${dim(loaded.source === 'companion' ? '(it announced itself to the companion)' : `(profile: ${loaded.profile})`)}`);
 
   // Step B: the Allow User Scripts toggle.
   const toggleCheck = () => {
+    const rec = freshRecord();
+    if (rec && rec.userScriptsEnabled) return rec;
     const s = scan(browser);
     return s.userScriptsEnabled ? s : null;
   };
   if (!toggleCheck()) {
     out(`  One switch left: turn on ${bold('Allow User Scripts')}.`);
+    out(dim('  Then click the Sitecraft toolbar icon once, so the extension reports the switch.'));
     openPage(browser, DETAILS_URL, noOpen);
     const found = await confirmWhenReady(toggleCheck, {
       instruction: `  ${DOT} Press Enter once the switch is on (or type "go" to continue): `,
-      fail: 'The switch still reads off on disk. Press Enter to check again, or type "go".',
+      fail: 'The switch still reads off. Turn it on, click the Sitecraft icon once, then press Enter. Or type "go".',
     });
     if (!found || found === 'skipped') {
-      out(`${yellow('•')} Not confirmed from disk. The panel checklist will confirm it.`);
+      out(`${yellow('•')} Not confirmed. The panel checklist will confirm it.`);
       return 'unconfirmed';
     }
   }

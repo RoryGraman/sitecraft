@@ -67,7 +67,7 @@ const ASSISTANT_ERROR_TEXT: Record<SDKAssistantMessageError, string> = {
   rate_limit: 'Claude rate limit reached. Wait a moment and try again.',
   overloaded: 'Claude is overloaded right now. Try again in a moment.',
   invalid_request: 'Claude rejected the request as invalid.',
-  model_not_found: 'The requested Claude model was not found. Check the SITECRAFT_MODEL setting.',
+  model_not_found: 'The requested Claude model was not found. Pick another model in the panel, or check the companion model setting.',
   server_error: 'Claude returned a server error. Try again.',
   unknown: 'Claude returned an unknown error.',
   max_output_tokens: 'Claude ran out of output space before finishing.',
@@ -273,8 +273,17 @@ function handleMessage(m: SDKMessage, c: Collected, onProgress: (s: string) => v
 // Shared query plumbing
 // ---------------------------------------------------------------------------
 
+/** First non-empty model name wins. '' and whitespace count as unset. */
+function pickModel(...candidates: (string | undefined)[]): string | undefined {
+  for (const c of candidates) {
+    const t = c?.trim();
+    if (t) return t;
+  }
+  return undefined;
+}
+
 function resolveModel(model: string | undefined): string {
-  return model ?? process.env.SITECRAFT_MODEL ?? DEFAULT_MODEL;
+  return pickModel(model, process.env.SITECRAFT_MODEL) ?? DEFAULT_MODEL;
 }
 
 /** Options common to every isolated query. */
@@ -366,7 +375,7 @@ export const runAgent: RunAgentFn = async (payload, hooks, opts = {}) => {
       options: {
         ...baseOptions(logger, abortController),
         systemPrompt: buildSystemPrompt(),
-        model: resolveModel(opts.model),
+        model: resolveModel(pickModel(payload.model, opts.model)),
         mcpServers: { sitecraft: server },
         allowedTools: [INSPECT_TOOL_FULL_NAME],
         outputFormat: { type: 'json_schema', schema: OUTPUT_SCHEMA },

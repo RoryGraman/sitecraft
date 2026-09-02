@@ -161,6 +161,14 @@ describe('startHost', () => {
     expect(runAgent.mock.calls[0]?.[2]).toMatchObject({ model: 'test-model', maxTurns: 3 });
   });
 
+  it('passes a payload model through to runAgent', async () => {
+    const runAgent = vi.fn<RunAgentFn>(async () => goodScript);
+    const h = makeHost({ runAgent });
+    h.send({ type: 'run', requestId: 'r-model', payload: { ...payload, model: 'claude-fable-5' } });
+    await h.waitFor(isType('result', 'r-model'));
+    expect(runAgent.mock.calls[0]?.[0]).toMatchObject({ model: 'claude-fable-5' });
+  });
+
   it('rejects inspectPage when the extension reports an inspect error', async () => {
     let inspectError: string | null = null;
     const runAgent: RunAgentFn = async (_p, hooks) => {

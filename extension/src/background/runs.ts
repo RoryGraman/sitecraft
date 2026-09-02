@@ -31,6 +31,8 @@ export interface RunStartRequest {
   text: string;
   /** Set when the user asks to modify an existing script. */
   targetScriptId?: string;
+  /** Model id for this run. Unset: the companion's configured default. */
+  model?: string;
 }
 
 export interface RunManagerDeps {
@@ -151,6 +153,7 @@ export function createRunManager(deps: RunManagerDeps): RunManager {
       existingScripts: scripts.filter((s) => matchesPattern(s.urlPattern, page.url)),
     };
     if (target) payload.targetScript = target;
+    if (req.model !== undefined) payload.model = req.model;
 
     progress(runId, 'Asking Claude.');
     const output = await deps.native.run(
@@ -218,6 +221,7 @@ export function createRunManager(deps: RunManagerDeps): RunManager {
       active.set(runId, controller);
       const request: RunStartRequest = { tabId: req.tabId, text };
       if (req.targetScriptId !== undefined) request.targetScriptId = req.targetScriptId;
+      if (typeof req.model === 'string' && req.model.trim() !== '') request.model = req.model;
       // Start on the next macrotask so the caller's reply reaches the sidebar
       // before any event for this run does.
       setTimeout(() => {

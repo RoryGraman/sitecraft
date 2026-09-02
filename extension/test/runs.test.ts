@@ -140,8 +140,26 @@ describe('createRunManager: success path', () => {
     expect(payload.page).toEqual(PAGE);
     expect(payload.existingScripts.map((s) => s.id).sort()).toEqual([same.id, disabledSame.id].sort());
     expect(payload.targetScript).toBeUndefined();
+    expect(payload.model).toBeUndefined();
     const opts = h.native.run.mock.calls[0]?.[2];
     expect(opts?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('drops an empty model instead of forwarding it', async () => {
+    const h = harness();
+    h.native.run.mockResolvedValueOnce(OUTPUT);
+    const { runId } = await h.manager.start({ tabId: 5, text: 'Do it', model: '' });
+    await h.done(runId);
+    expect((h.native.run.mock.calls[0]?.[0] as AgentRequest).model).toBeUndefined();
+  });
+
+  it('forwards the picked model to the companion payload', async () => {
+    const h = harness();
+    h.native.run.mockResolvedValueOnce(OUTPUT);
+    const { runId } = await h.manager.start({ tabId: 5, text: 'Do it', model: 'claude-sonnet-5' });
+    await h.done(runId);
+    const payload = h.native.run.mock.calls[0]?.[0] as AgentRequest;
+    expect(payload.model).toBe('claude-sonnet-5');
   });
 
   it('emits progress events for its own steps and for companion progress', async () => {

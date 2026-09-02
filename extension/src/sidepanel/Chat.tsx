@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { MODELS } from '@sitecraft/shared';
 import type { SidebarRequest, SidebarState, SiteScript } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
 import { TabPicker } from './components/TabPicker';
@@ -28,6 +29,19 @@ type RunRequest = Extract<SidebarRequest, { type: 'runRequest' }>;
 
 const CANCEL_GRACE_MS = 5000;
 
+const MODEL_STORAGE_KEY = 'sitecraft-model';
+
+/** The saved model pick. '' means the companion's default. */
+function storedModel(): string {
+  try {
+    const v = localStorage.getItem(MODEL_STORAGE_KEY);
+    if (v !== null && (v === '' || MODELS.some((m) => m.id === v))) return v;
+  } catch {
+    // Storage can be unavailable; fall through to the default.
+  }
+  return '';
+}
+
 export function Chat(props: ChatProps) {
   const { bridge, state, page, modifyTarget, onModify, onClearModify, onState } = props;
   const [text, setText] = useState('');
@@ -35,6 +49,7 @@ export function Chat(props: ChatProps) {
   const [runId, setRunId] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [model, setModel] = useState<string>(storedModel);
 
   const counter = useRef(0);
   const runIdRef = useRef<string | null>(null);
@@ -119,6 +134,7 @@ export function Chat(props: ChatProps) {
     const req: RunRequest = modifyTarget
       ? { type: 'runRequest', tabId, text: request, targetScriptId: modifyTarget.id }
       : { type: 'runRequest', tabId, text: request };
+    if (model !== '') req.model = model;
     try {
       const started = await bridge.request(req);
       runTabRef.current = tabId;
@@ -160,6 +176,15 @@ export function Chat(props: ChatProps) {
   }
 
   const running = runId !== null;
+
+  function pickModel(id: string): void {
+    setModel(id);
+    try {
+      localStorage.setItem(MODEL_STORAGE_KEY, id);
+    } catch {
+      // Storage can be off; the pick then lasts for this session only.
+    }
+  }
 
   return (
     <div className="chat">
@@ -221,7 +246,7 @@ export function Chat(props: ChatProps) {
         <div className="chip" data-testid="modify-chip">
           <span>Modifying: {modifyTarget.name}</span>
           <button type="button" className="chip-x" data-testid="modify-clear" aria-label="Stop modifying" onClick={onClearModify}>
-            x
+            ×
           </button>
         </div>
       )}
@@ -237,6 +262,26 @@ export function Chat(props: ChatProps) {
           onKeyDown={onKeyDown}
         />
         <div className="row">
+          <select
+            className="model-select"
+            data-testid="model-picker"
+            aria-label="Model"
+            value={model}
+            onChange={(e) => pickModel(e.target.value)}
+          >
+            <option value="">Default model</option>
+            {MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <span className="spacer" />
+          {running && (
+            <button type="button" className="btn" data-testid="chat-cancel" onClick={() => void cancel()}>
+              Cancel
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-primary"
@@ -246,19 +291,14 @@ export function Chat(props: ChatProps) {
           >
             Send
           </button>
-          {running && (
-            <button type="button" className="btn" data-testid="chat-cancel" onClick={() => void cancel()}>
-              Cancel
-            </button>
-          )}
-          {noPage ? (
-            <span className="muted hint" data-testid="no-page-hint">
-              Open a website in this window to make changes.
-            </span>
-          ) : (
-            <span className="muted hint">Enter sends. Shift+Enter adds a line.</span>
-          )}
         </div>
+        {noPage ? (
+          <p className="muted hint composer-hint" data-testid="no-page-hint">
+            Open a website in this window to make changes.
+          </p>
+        ) : (
+          <p className="muted hint composer-hint">Enter sends. Shift+Enter adds a line.</p>
+        )}
       </div>
     </div>
   );
@@ -301,13 +341,16 @@ function ResultCard({ item, live, onKeep, onUndo, onModify }: ResultCardProps) {
   return (
     <div className="msg msg-result" data-testid="result-card" data-script-id={item.scriptId}>
       <div className="result-head">
-        <strong>{script.name}</strong>
+        <strong title={script.name}>{script.name}</strong>
         <span className={`badge badge-${script.kind}`}>{script.kind.toUpperCase()}</span>
         {live?.trial && <span className="badge badge-trial">Trial</span>}
       </div>
       {script.description && <p className="card-desc">{script.description}</p>}
-      <div className="muted">
-        <code className="pattern">{script.urlPattern}</code> Priority {script.priority}
+      <div className="card-meta">
+        <code className="pattern" title={script.urlPattern}>
+          {script.urlPattern}
+        </code>
+        <span className="prio-label">Priority {script.priority}</span>
       </div>
       <p className="result-status">{status}</p>
       <div className="row">

@@ -18,7 +18,10 @@ import {
   type,
 } from './ui.fakes';
 
-afterEach(cleanup);
+afterEach(async () => {
+  await cleanup();
+  localStorage.removeItem('sitecraft-model');
+});
 
 describe('App onboarding gate', () => {
   it('shows onboarding with three live rows when checks fail', async () => {
@@ -103,6 +106,20 @@ describe('App onboarding gate', () => {
 });
 
 describe('Chat', () => {
+  it('sends the picked model with the request and remembers it', async () => {
+    const bridge = new FakeBridge({ activeTab: tabB });
+    await mount(bridge);
+    const picker = byTestId<HTMLSelectElement>('model-picker');
+    await act(async () => {
+      picker.value = 'claude-fable-5';
+      picker.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await type(byTestId<HTMLTextAreaElement>('chat-input'), 'Hide it');
+    await click(byTestId('chat-send'));
+    expect(bridge.callsOf('runRequest')).toEqual([{ type: 'runRequest', tabId: 12, text: 'Hide it', model: 'claude-fable-5' }]);
+    expect(localStorage.getItem('sitecraft-model')).toBe('claude-fable-5');
+  });
+
   it('sends a request for the active page and shows progress then a result card', async () => {
     const bridge = new FakeBridge({ activeTab: tabB });
     await mount(bridge);

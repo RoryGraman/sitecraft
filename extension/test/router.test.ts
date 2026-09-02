@@ -529,9 +529,9 @@ describe('router: runs and companion', () => {
   it('runRequest starts a run and cancelRun cancels it', async () => {
     const h = harness();
     const port = h.connect();
-    const started = await h.send(port, { type: 'runRequest', tabId: 3, text: 'Hide it', targetScriptId: 'x' });
+    const started = await h.send(port, { type: 'runRequest', tabId: 3, text: 'Hide it', targetScriptId: 'x', model: 'claude-fable-5' });
     expect(started).toEqual({ runId: 'run-1' });
-    expect(h.runs.start).toHaveBeenCalledWith({ tabId: 3, text: 'Hide it', targetScriptId: 'x' });
+    expect(h.runs.start).toHaveBeenCalledWith({ tabId: 3, text: 'Hide it', targetScriptId: 'x', model: 'claude-fable-5' });
     await h.sendState(port, { type: 'cancelRun', runId: 'run-1' });
     expect(h.runs.cancel).toHaveBeenCalledWith('run-1');
   });

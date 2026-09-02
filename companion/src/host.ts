@@ -78,6 +78,7 @@ function isAgentRequest(v: unknown): v is AgentRequest {
     typeof v.page.url === 'string' &&
     typeof v.page.title === 'string' &&
     typeof v.page.snapshot === 'string' &&
+    (v.model === undefined || typeof v.model === 'string') &&
     Array.isArray(v.existingScripts)
   );
 }

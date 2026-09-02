@@ -305,6 +305,18 @@ describe('runAgent', () => {
     }
   });
 
+  it('ignores an empty payload model and falls back to the configured one', async () => {
+    sdk.messages = [init, success({ structured_output: GOOD })];
+    await runAgent({ ...PAYLOAD, model: '  ' }, makeHooks(), { cwd: '/tmp', model: 'claude-test-model' });
+    expect((sdk.queryParams[0] as MockQueryParams).options!.model).toBe('claude-test-model');
+  });
+
+  it('prefers the model named in the payload over the configured one', async () => {
+    sdk.messages = [init, success({ structured_output: GOOD })];
+    await runAgent({ ...PAYLOAD, model: 'claude-sonnet-5' }, makeHooks(), { cwd: '/tmp', model: 'claude-test-model' });
+    expect((sdk.queryParams[0] as MockQueryParams).options!.model).toBe('claude-sonnet-5');
+  });
+
   it('aborts through hooks.signal: closes the query and rejects', async () => {
     sdk.messages = [init, HANG, success({ structured_output: GOOD })];
     const ac = new AbortController();

@@ -56,6 +56,8 @@ export type SidebarRequest =
       text: string;
       /** Set when the user asks to modify an existing script. */
       targetScriptId?: string;
+      /** Model id for this run. Unset: the companion's configured default. */
+      model?: string;
     }
   | { type: 'cancelRun'; runId: string }
   | { type: 'keepScript'; id: string }
@@ -180,6 +182,8 @@ export interface AgentRequest {
   existingScripts: SiteScript[];
   /** Set when the user wants to modify one existing script. */
   targetScript?: SiteScript;
+  /** Model id picked in the panel. Overrides the companion's default for this run. */
+  model?: string;
 }
 
 /** Extension -> Companion */

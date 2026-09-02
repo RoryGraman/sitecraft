@@ -314,6 +314,7 @@ export function createRouter(deps: RouterDeps): Router {
       case 'runRequest': {
         const start: RunStartRequest = { tabId: req.tabId, text: req.text };
         if (req.targetScriptId !== undefined) start.targetScriptId = req.targetScriptId;
+        if (req.model !== undefined) start.model = req.model;
         return runs.start(start);
       }
       case 'cancelRun':

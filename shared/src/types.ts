@@ -87,6 +87,16 @@ export interface OnboardingStatus {
   claudeLogin: { state: 'unknown' | 'checking' | 'ok' | 'error'; detail?: string };
 }
 
+/** Models the panel offers for a run. Shown in the Chat composer. */
+export const MODELS = [
+  { id: 'claude-opus-5', label: 'Opus 5' },
+  { id: 'claude-fable-5', label: 'Fable 5' },
+  { id: 'claude-opus-4-8', label: 'Opus 4.8' },
+  { id: 'claude-sonnet-5', label: 'Sonnet 5' },
+] as const;
+
+export type ModelId = (typeof MODELS)[number]['id'];
+
 export interface TabInfo {
   tabId: number;
   windowId: number;

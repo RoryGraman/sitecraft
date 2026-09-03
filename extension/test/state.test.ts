@@ -555,6 +555,23 @@ describe('createStateStore', () => {
       expect((await store.getScripts()).map((s) => s.id)).toEqual(['ext']);
     });
 
+    it('writes the repaired form of an external change back, so later refreshes stay quiet', async () => {
+      const { area, store } = setup();
+      await store.load();
+      const cb = vi.fn();
+      store.onChange(cb);
+      area.external({ scripts: [{ id: 'ext', urlPattern: 'https://x.com/*', kind: 'js', code: 'go()' }] });
+      await flush();
+      expect(cb).toHaveBeenCalledTimes(1);
+      const stored = (area.data.scripts as SiteScript[])[0];
+      expect(stored?.priority).toBe(3);
+      expect(typeof stored?.createdAt).toBe('string');
+      // The next refresh reads the repaired record, so nothing looks changed.
+      area.external({ errors: {} });
+      await flush();
+      expect(cb).toHaveBeenCalledTimes(1);
+    });
+
     it('ignores external events for unrelated keys', async () => {
       const { area, store } = setup();
       await store.load();

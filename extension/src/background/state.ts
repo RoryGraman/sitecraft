@@ -263,10 +263,16 @@ export function createStateStore(area: chrome.storage.StorageArea = chrome.stora
   function refreshFromArea(): Promise<void> {
     return enqueue(async () => {
       if (!cache) return; // nothing loaded yet; the first read will see the new data
-      const fresh = migrate(await readRaw());
+      const raw = await readRaw();
+      const fresh = migrate(raw);
       if (deepEqual(fresh, cache)) return; // an echo of our own write
       cache = fresh;
       notify();
+      // An outside writer left data that migrate had to repair (for example a
+      // script without dates). Persist the repaired form, so the next refresh
+      // reads exactly this state instead of repairing it again with a newer
+      // clock value and notifying a second time.
+      if (fresh.schemaVersion === SCHEMA_VERSION && !deepEqual(pickRaw(raw), fresh)) await area.set({ ...fresh });
     });
   }
 

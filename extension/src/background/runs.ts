@@ -8,7 +8,14 @@
  * functions from content/snapshot.ts.
  */
 
-import { INSPECT_MAX_CHARS, SNAPSHOT_MAX_CHARS, matchesPattern, validateAgentOutput } from '@sitecraft/shared';
+import {
+  INSPECT_MAX_CHARS,
+  SNAPSHOT_MAX_CHARS,
+  SNAPSHOT_MAX_REPEATED_SIBLINGS,
+  errorMessage,
+  matchesPattern,
+  validateAgentOutput,
+} from '@sitecraft/shared';
 import type {
   AgentRequest,
   AgentScriptOutput,
@@ -22,6 +29,7 @@ import { newId, nowIso } from '../lib/ids';
 import { elementOuterHtmlInPage, snapshotInPage, type PageInspectResult } from '../content/snapshot';
 import type { NativeClient } from './native';
 import type { StateStore } from './state';
+import { isWebUrl } from './tabs';
 import { isUserScriptsAvailable } from './userScripts';
 import type { RegisterAllResult, registerAll } from './userScripts';
 
@@ -55,9 +63,6 @@ export interface RunManager {
   isActive(runId: string): boolean;
 }
 
-/** Same default as lib/domSnapshot.ts. */
-const DEFAULT_MAX_REPEATED_SIBLINGS = 5;
-
 const REGISTER_ERROR_PREFIX = 'Chrome refused to register this script';
 
 class CancelledError extends Error {
@@ -65,10 +70,6 @@ class CancelledError extends Error {
     super('Run cancelled.');
     this.name = 'CancelledError';
   }
-}
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 // ---------------------------------------------------------------------------
@@ -283,17 +284,6 @@ export function createRunManager(deps: RunManagerDeps): RunManager {
 // tab helpers (chrome.tabs + chrome.scripting)
 // ---------------------------------------------------------------------------
 
-/** Sitecraft can only read and customize http, https and file pages. */
-export function isSupportedPageUrl(url: string | undefined): boolean {
-  if (typeof url !== 'string' || url === '') return false;
-  try {
-    const protocol = new URL(url).protocol;
-    return protocol === 'http:' || protocol === 'https:' || protocol === 'file:';
-  } catch {
-    return false;
-  }
-}
-
 /** Sends a message to the tab's content script. Undefined when nothing answers. */
 async function sendToTab(tabId: number, message: unknown): Promise<unknown> {
   try {
@@ -317,13 +307,13 @@ async function executeInTab<Args extends unknown[], Result>(
 export async function takeSnapshotFromTab(tabId: number): Promise<PageContext> {
   const tab = await chrome.tabs.get(tabId);
   const url = tab.url;
-  if (!isSupportedPageUrl(url)) {
+  if (!isWebUrl(url)) {
     throw new Error('Sitecraft works on http, https and file pages only. Pick another tab.');
   }
   const fromContentScript = await sendToTab(tabId, { type: 'takeSnapshot', maxChars: SNAPSHOT_MAX_CHARS });
   let snapshot = typeof fromContentScript === 'string' ? fromContentScript : '';
   if (snapshot === '') {
-    const injected = await executeInTab(tabId, snapshotInPage, [SNAPSHOT_MAX_CHARS, DEFAULT_MAX_REPEATED_SIBLINGS]);
+    const injected = await executeInTab(tabId, snapshotInPage, [SNAPSHOT_MAX_CHARS, SNAPSHOT_MAX_REPEATED_SIBLINGS]);
     snapshot = typeof injected === 'string' ? injected : '';
   }
   if (snapshot === '') throw new Error('Could not read the page. Reload the tab and try again.');

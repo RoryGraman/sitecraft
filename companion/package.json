@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Sitecraft companion: native messaging host that runs the Claude Agent SDK.",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "sitecraft": "bin/sitecraft.js"
   },

@@ -48,11 +48,15 @@ export function protocolOf(url: string | undefined): string | null {
   }
 }
 
-/** A tab Sitecraft can work on: has an id and an http, https or file URL. */
-export function isWebTab(tab: chrome.tabs.Tab): tab is WebTab {
-  if (typeof tab.id !== 'number') return false;
-  const protocol = protocolOf(tab.url);
+/** Sitecraft can only read and customize http, https and file pages. */
+export function isWebUrl(url: string | undefined): boolean {
+  const protocol = protocolOf(url);
   return protocol === 'http:' || protocol === 'https:' || protocol === 'file:';
+}
+
+/** A tab Sitecraft can work on: has an id and a web URL. */
+export function isWebTab(tab: chrome.tabs.Tab): tab is WebTab {
+  return typeof tab.id === 'number' && isWebUrl(tab.url);
 }
 
 export function toTabInfo(tab: WebTab): TabInfo {

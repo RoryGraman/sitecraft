@@ -230,13 +230,14 @@ function checkNode() {
 }
 
 function ensurePnpm() {
-  if (tryRun('pnpm', ['--version']) !== null) {
-    out(`${OK} pnpm ${tryRun('pnpm', ['--version']).trim()}`);
+  let version = tryRun('pnpm', ['--version']);
+  if (version !== null) {
+    out(`${OK} pnpm ${version.trim()}`);
     return;
   }
   out(`  ${DOT} pnpm is missing. Trying corepack.`);
   tryRun('corepack', ['enable']);
-  const version = tryRun('pnpm', ['--version']);
+  version = tryRun('pnpm', ['--version']);
   if (version === null) {
     fatal('pnpm is not available.', 'Install it with: npm install -g pnpm@9', 'Then run ./setup again.');
   }

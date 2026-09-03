@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { EXTENSION_ID, type CompanionStatus, type OnboardingStatus, type SidebarState } from '@sitecraft/shared';
+import { EXTENSION_ID, errorMessage, type CompanionStatus, type OnboardingStatus, type SidebarState } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
-import { errorMessage } from './util';
 
 export const POLL_INTERVAL_MS = 2000;
 export const EXTENSION_DETAILS_URL = `chrome://extensions/?id=${EXTENSION_ID}`;
@@ -26,6 +25,12 @@ export function allChecksPass(status: OnboardingStatus | null): boolean {
 }
 
 type RowState = 'ok' | 'fail' | 'checking';
+
+/** Row state for a check: its pass value, 'checking', or anything else as a failure. */
+function rowState(state: string, pass: string): RowState {
+  if (state === pass) return 'ok';
+  return state === 'checking' ? 'checking' : 'fail';
+}
 
 export function companionLabel(c: CompanionStatus): string {
   switch (c.state) {
@@ -129,20 +134,8 @@ export function Onboarding(props: OnboardingProps) {
   }
 
   const userScriptsState: RowState = status ? (status.userScriptsEnabled ? 'ok' : 'fail') : 'checking';
-  const companionState: RowState = status
-    ? status.companion.state === 'connected'
-      ? 'ok'
-      : status.companion.state === 'checking'
-        ? 'checking'
-        : 'fail'
-    : 'checking';
-  const loginState: RowState = status
-    ? status.claudeLogin.state === 'ok'
-      ? 'ok'
-      : status.claudeLogin.state === 'checking'
-        ? 'checking'
-        : 'fail'
-    : 'checking';
+  const companionState = status ? rowState(status.companion.state, 'connected') : 'checking';
+  const loginState = status ? rowState(status.claudeLogin.state, 'ok') : 'checking';
   const ready = allChecksPass(status);
 
   return (

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { matchesPattern, type ImportResult, type SidebarState, type SiteScript, type TabInfo } from '@sitecraft/shared';
+import { errorMessage, matchesPattern, type ImportResult, type SidebarState, type SiteScript, type TabInfo } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
 import { CARD_UI_CLOSED, ScriptCard, type CardUi } from './components/ScriptCard';
-import { errorMessage, hostOf, mutate } from './util';
+import { hostOf, mutate } from './util';
 
 export interface ManagerProps {
   bridge: Bridge;

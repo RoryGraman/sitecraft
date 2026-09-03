@@ -14,6 +14,7 @@
 import {
   EXTENSION_ID,
   SIDEBAR_PORT_NAME,
+  errorMessage,
   isEventEnvelope,
   isReplyEnvelope,
   type SidebarEvent,
@@ -90,7 +91,7 @@ abstract class PortBridge implements Bridge {
         port.postMessage(envelope);
       } catch (e) {
         this.pending.delete(requestId);
-        reject(new Error(`Disconnected: ${e instanceof Error ? e.message : String(e)}`));
+        reject(new Error(`Disconnected: ${errorMessage(e)}`));
         this.dropPort(port);
       }
     });
@@ -120,8 +121,7 @@ abstract class PortBridge implements Bridge {
     try {
       port = this.openPort(runtime);
     } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      throw new Error(`${NOT_REACHABLE_MESSAGE} (${detail})`);
+      throw new Error(`${NOT_REACHABLE_MESSAGE} (${errorMessage(e)})`);
     }
     this.port = port;
     this.sawMessage = false;

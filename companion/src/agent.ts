@@ -23,6 +23,8 @@ import { z } from 'zod';
 import {
   DESCRIPTION_MAX_CHARS,
   NAME_MAX_CHARS,
+  errorMessage,
+  isRecord,
   validateAgentOutput,
   type AgentRequest,
   type AgentScriptOutput,
@@ -84,11 +86,6 @@ const RESULT_ERROR_TEXT: Record<Exclude<SDKResultMessage['subtype'], 'success'>,
   error_max_structured_output_retries: 'The agent could not produce a valid result after several tries.',
 };
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
-
 /** Combine a readable message with raw detail, without repeating the same text. */
 function withDetail(message: string, detail: string | undefined): string {
   const d = detail?.trim();
@@ -124,11 +121,11 @@ function tryParse(s: string): unknown {
 }
 
 interface Collected {
-  result: SDKResultMessage | undefined;
+  result?: SDKResultMessage;
   /** Readable text for the last assistant-level error code seen. */
-  assistantError: string | undefined;
+  assistantError?: string;
   /** Model name reported by the init message. */
-  model: string | undefined;
+  model?: string;
 }
 
 /**
@@ -156,8 +153,8 @@ export function clampText(text: string, max: number): string {
  * left alone so validateAgentOutput still reports real problems.
  */
 export function normalizeAgentOutput(candidate: unknown, logger: Logger = nullLogger): unknown {
-  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) return candidate;
-  const out: Record<string, unknown> = { ...(candidate as Record<string, unknown>) };
+  if (!isRecord(candidate)) return candidate;
+  const out: Record<string, unknown> = { ...candidate };
   const limits: [string, number][] = [
     ['name', NAME_MAX_CHARS],
     ['description', DESCRIPTION_MAX_CHARS],
@@ -172,19 +169,28 @@ export function normalizeAgentOutput(candidate: unknown, logger: Logger = nullLo
   return out;
 }
 
-/** Turn the collected messages into a validated AgentScriptOutput or throw. */
-function extractOutput(c: Collected, logger: Logger = nullLogger): AgentScriptOutput {
+type SuccessResult = Extract<SDKResultMessage, { subtype: 'success' }>;
+
+/** The successful result of a drained query, or a readable error when it failed. */
+function finished(c: Collected): { ok: true; result: SuccessResult } | { ok: false; error: string } {
   const { result, assistantError } = c;
-  if (!result) throw new Error(assistantError ?? 'The agent ended without a result.');
+  if (!result) return { ok: false, error: assistantError ?? 'The agent ended without a result.' };
   if (result.subtype !== 'success') {
     const detail = result.errors.filter(Boolean).join('; ');
-    throw new Error(withDetail(assistantError ?? RESULT_ERROR_TEXT[result.subtype], detail));
+    return { ok: false, error: withDetail(assistantError ?? RESULT_ERROR_TEXT[result.subtype], detail) };
   }
   if (result.is_error) {
-    throw new Error(assistantError ? withDetail(assistantError, result.result) : `Agent error: ${result.result || 'unknown error'}`);
+    return { ok: false, error: assistantError ? withDetail(assistantError, result.result) : `Agent error: ${result.result || 'unknown error'}` };
   }
-  let candidate: unknown = result.structured_output;
-  if (candidate === undefined) candidate = parseJsonFromText(result.result ?? '');
+  return { ok: true, result };
+}
+
+/** Turn the collected messages into a validated AgentScriptOutput or throw. */
+function extractOutput(c: Collected, logger: Logger = nullLogger): AgentScriptOutput {
+  const fin = finished(c);
+  if (!fin.ok) throw new Error(fin.error);
+  let candidate: unknown = fin.result.structured_output;
+  if (candidate === undefined) candidate = parseJsonFromText(fin.result.result ?? '');
   if (candidate === undefined) throw new Error('The agent returned no structured output.');
   const v = validateAgentOutput(normalizeAgentOutput(candidate, logger));
   if (!v.ok) throw new Error(`Agent output failed validation: ${v.error}`);
@@ -368,7 +374,7 @@ export const runAgent: RunAgentFn = async (payload, hooks, opts = {}) => {
   });
 
   const work = await workDir(opts.cwd);
-  const c: Collected = { result: undefined, assistantError: undefined, model: undefined };
+  const c: Collected = {};
   try {
     const q = query({
       prompt: buildUserPrompt(payload),
@@ -415,7 +421,7 @@ export async function checkClaudeLogin(opts: { timeoutMs?: number; model?: strin
   const abortController = new AbortController();
   const timer = setTimeout(() => abortController.abort(), timeoutMs);
   const model = resolveModel(opts.model);
-  const c: Collected = { result: undefined, assistantError: undefined, model: undefined };
+  const c: Collected = {};
   let work: WorkDir | undefined;
   try {
     work = await workDir(undefined);
@@ -432,15 +438,9 @@ export async function checkClaudeLogin(opts: { timeoutMs?: number; model?: strin
     });
     await drain(q, c, () => {}, logger);
 
-    const { result, assistantError } = c;
-    if (!result) return { ok: false, detail: assistantError ?? 'No result from Claude.' };
-    if (result.subtype !== 'success') {
-      return { ok: false, detail: withDetail(assistantError ?? RESULT_ERROR_TEXT[result.subtype], result.errors.filter(Boolean).join('; ')) };
-    }
-    if (result.is_error) {
-      return { ok: false, detail: assistantError ? withDetail(assistantError, result.result) : `Claude error: ${result.result || 'unknown error'}` };
-    }
-    const text = result.result ?? '';
+    const fin = finished(c);
+    if (!fin.ok) return { ok: false, detail: fin.error };
+    const text = fin.result.result ?? '';
     if (text.includes('OK')) return { ok: true, detail: `Claude replied. Model: ${c.model ?? model}.` };
     return { ok: false, detail: `Unexpected reply from Claude: ${progressText(text) || '(empty)'}` };
   } catch (e) {

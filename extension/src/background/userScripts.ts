@@ -7,7 +7,7 @@
  * a pattern Chrome rejects does not block the other bundles.
  */
 
-import { buildJsBundles, type JsBundle, type SiteScript } from '@sitecraft/shared';
+import { buildJsBundles, errorMessage, type JsBundle, type SiteScript } from '@sitecraft/shared';
 
 /** Called once per bundle that Chrome refused to register. */
 export type BundleErrorCallback = (scriptIds: string[], message: string) => void;
@@ -44,10 +44,6 @@ function toRegistration(bundle: JsBundle): chrome.userScripts.RegisteredUserScri
     runAt: 'document_end',
     allFrames: false,
   };
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 /**

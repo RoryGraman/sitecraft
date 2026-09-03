@@ -12,6 +12,7 @@ import {
   DEFAULT_SETTINGS,
   PRIORITIES,
   SCHEMA_VERSION,
+  isRecord,
 } from '@sitecraft/shared';
 import type {
   Priority,
@@ -62,10 +63,6 @@ export function migrate(raw: Record<string, unknown>): StoredState {
     settings: normalizeSettings(raw.settings),
     errors: normalizeErrors(raw.errors),
   };
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 function isNonEmptyString(v: unknown): v is string {
@@ -122,9 +119,6 @@ function normalizeSettings(value: unknown): Settings {
   const v = isRecord(value) ? value : {};
   return {
     onboardingDone: typeof v.onboardingDone === 'boolean' ? v.onboardingDone : DEFAULT_SETTINGS.onboardingDone,
-    companionHostName: isNonEmptyString(v.companionHostName)
-      ? v.companionHostName
-      : DEFAULT_SETTINGS.companionHostName,
   };
 }
 

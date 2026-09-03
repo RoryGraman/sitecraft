@@ -87,7 +87,7 @@ export class FakeBridge implements Bridge {
     this.errors = init.errors ?? {};
     this.state = {
       scripts: init.scripts ?? [],
-      settings: { onboardingDone: init.onboardingDone ?? false, companionHostName: 'com.sitecraft.companion' },
+      settings: { onboardingDone: init.onboardingDone ?? false },
       errors: {},
       companion: this.onboarding.companion,
     };

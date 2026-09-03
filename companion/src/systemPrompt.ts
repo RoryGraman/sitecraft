@@ -6,7 +6,7 @@
  * buildUserPrompt(payload): the request, the page, existing scripts and the snapshot.
  * OUTPUT_SCHEMA: JSON schema for AgentScriptOutput, used as the SDK outputFormat.
  */
-import type { AgentRequest, SiteScript } from '@sitecraft/shared';
+import { patternForUrl, type AgentRequest, type SiteScript } from '@sitecraft/shared';
 
 /** How much of each existing script's code the agent sees. */
 export const EXISTING_CODE_PREVIEW_CHARS = 400;
@@ -111,17 +111,6 @@ function fenced(content: string, lang = ''): string {
   return `${f}${lang}\n${content}\n${f}`;
 }
 
-/** Default pattern for a page: same scheme and host, any path. Null for unsupported URLs. */
-function suggestedPattern(url: string): string | null {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    return `${u.protocol}//${u.host}/*`;
-  } catch {
-    return null;
-  }
-}
-
 function describeExisting(s: SiteScript): string {
   const preview = s.code.length > EXISTING_CODE_PREVIEW_CHARS ? s.code.slice(0, EXISTING_CODE_PREVIEW_CHARS) + '\n[truncated]' : s.code;
   const lines = [
@@ -158,7 +147,8 @@ export function buildUserPrompt(payload: AgentRequest): string {
   parts.push('# Request', request.trim() || '(empty request)');
 
   const pageLines = [`URL: ${page.url}`, `Title: ${page.title || '(no title)'}`];
-  const suggested = suggestedPattern(page.url);
+  // No hint for file pages: file:///* would cover every local file.
+  const suggested = page.url.startsWith('file:') ? null : patternForUrl(page.url);
   if (suggested) pageLines.push(`Default match pattern: ${suggested}`);
   parts.push('# Page', pageLines.join('\n'));
 

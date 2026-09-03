@@ -253,9 +253,7 @@ describe('migrate', () => {
       ...DEFAULT_SETTINGS,
       onboardingDone: true,
     });
-    expect(migrate({ settings: { onboardingDone: 'yes', companionHostName: '' } }).settings).toEqual(
-      DEFAULT_SETTINGS,
-    );
+    expect(migrate({ settings: { onboardingDone: 'yes' } }).settings).toEqual(DEFAULT_SETTINGS);
     expect(migrate({ settings: 'junk' }).settings).toEqual(DEFAULT_SETTINGS);
   });
 

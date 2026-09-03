@@ -7,6 +7,7 @@
 
 import { parseMatchPattern } from './matchPattern.js';
 import { SCHEMA_VERSION } from './types.js';
+import { isRecord } from './util.js';
 import type { AgentScriptOutput, ExportFile, Priority, ScriptKind, SiteScript } from './types.js';
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -17,14 +18,10 @@ export const CODE_MAX_CHARS = 200_000;
 
 const EXPORT_FORMAT: ExportFile['format'] = 'sitecraft-scripts';
 
-type Field<T> = { ok: true; value: T } | { ok: false; error: string };
+type Field<T> = ValidationResult<T>;
 
 function fail<T = never>(error: string): Field<T> {
   return { ok: false, error };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** Trimmed string with a length range. */

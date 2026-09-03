@@ -7,14 +7,8 @@
  * chrome.scripting.insertCSS, which is not subject to the page CSP.
  */
 
-import { buildCssBundle, matchesPattern, type ContentMessage, type SiteScript } from '@sitecraft/shared';
+import { cssForUrl, type ContentMessage } from '@sitecraft/shared';
 import type { StateStore } from './state';
-
-/** Concatenated CSS of every enabled css script whose pattern matches `url`. Empty when none. */
-export function cssForUrl(scripts: SiteScript[], url: string): string {
-  const matching = scripts.filter((s) => s.kind === 'css' && s.enabled && matchesPattern(s.urlPattern, url));
-  return buildCssBundle(matching);
-}
 
 export type InsertCss = (tabId: number, css: string) => Promise<void>;
 
@@ -29,7 +23,7 @@ function defaultInsertCss(tabId: number, css: string): Promise<void> {
   return chrome.scripting.insertCSS({ target: { tabId }, css });
 }
 
-function isCssBlocked(msg: unknown): msg is Extract<ContentMessage, { type: 'cssBlocked' }> {
+function isCssBlockedMessage(msg: unknown): msg is Extract<ContentMessage, { type: 'cssBlocked' }> {
   return (
     typeof msg === 'object' &&
     msg !== null &&
@@ -63,7 +57,7 @@ export function installCssFallback(store: Pick<StateStore, 'getScripts'>, opts: 
   const event = opts.onMessage ?? chrome.runtime.onMessage;
 
   const listener = (msg: unknown, sender: chrome.runtime.MessageSender): undefined => {
-    if (!isCssBlocked(msg)) return undefined;
+    if (!isCssBlockedMessage(msg)) return undefined;
     const tabId = sender.tab?.id;
     if (typeof tabId !== 'number') return undefined;
     // The tab URL reported by Chrome is trusted; the message URL is not.

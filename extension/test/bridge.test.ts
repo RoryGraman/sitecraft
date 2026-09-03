@@ -69,7 +69,7 @@ function installChrome(opts: { id?: string; connectThrows?: string } = {}) {
 
 const emptyState: SidebarState = {
   scripts: [],
-  settings: { onboardingDone: false, companionHostName: 'com.sitecraft.companion' },
+  settings: { onboardingDone: false },
   errors: {},
   companion: { state: 'unknown' },
 };

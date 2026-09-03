@@ -8,7 +8,6 @@ import type { RegisterAllResult } from '../src/background/userScripts';
 import {
   createRunManager,
   inspectInTab,
-  isSupportedPageUrl,
   syncUserScripts,
   syncUserScriptsIfEmpty,
   takeSnapshotFromTab,
@@ -431,18 +430,6 @@ describe('syncUserScripts', () => {
     const errors = area.data.errors as Record<string, { message: string; url: string }>;
     expect(errors[js.id]?.message).toContain('bad pattern');
     expect(errors[js.id]?.url).toBe(js.urlPattern);
-  });
-});
-
-describe('isSupportedPageUrl', () => {
-  it('accepts http, https and file urls only', () => {
-    expect(isSupportedPageUrl('https://a.com/')).toBe(true);
-    expect(isSupportedPageUrl('http://localhost:4174/')).toBe(true);
-    expect(isSupportedPageUrl('file:///tmp/x.html')).toBe(true);
-    expect(isSupportedPageUrl('chrome://extensions')).toBe(false);
-    expect(isSupportedPageUrl('about:blank')).toBe(false);
-    expect(isSupportedPageUrl('')).toBe(false);
-    expect(isSupportedPageUrl(undefined)).toBe(false);
   });
 });
 

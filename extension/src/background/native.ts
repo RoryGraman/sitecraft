@@ -6,7 +6,7 @@
  * to the current run, and drops the port after 60 s without pending requests.
  */
 
-import { INSPECT_MAX_CHARS, NATIVE_HOST_NAME } from '@sitecraft/shared';
+import { INSPECT_MAX_CHARS, NATIVE_HOST_NAME, errorMessage } from '@sitecraft/shared';
 import type {
   AgentRequest,
   AgentScriptOutput,
@@ -93,11 +93,6 @@ interface RequestExtras {
 
 function isHostOutbound(msg: unknown): msg is HostOutbound {
   return typeof msg === 'object' && msg !== null && typeof (msg as { type?: unknown }).type === 'string';
-}
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
 }
 
 function toError(e: unknown): Error {

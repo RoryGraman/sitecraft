@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { matchesPattern, type CompanionStatus, type OnboardingStatus, type SidebarState, type SiteScript } from '@sitecraft/shared';
+import { errorMessage, matchesPattern, type CompanionStatus, type OnboardingStatus, type SidebarState, type SiteScript } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
 import { Chat } from './Chat';
 import { Manager } from './Manager';
 import { Onboarding, allChecksPass, companionLabel } from './Onboarding';
 import { usePage } from './usePage';
-import { errorMessage, hostOf, truncate } from './util';
+import { hostOf, truncate } from './util';
 
 /** Longest page title shown in the strip. */
 const STRIP_TITLE_MAX = 60;
@@ -34,6 +34,17 @@ function dotClass(c: CompanionStatus): string {
   if (c.state === 'connected') return 'dot dot-ok';
   if (c.state === 'checking' || c.state === 'unknown') return 'dot dot-checking';
   return 'dot dot-fail';
+}
+
+function Brand() {
+  return (
+    <div className="brand">
+      <svg className="brand-logo" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" />
+      </svg>
+      Sitecraft
+    </div>
+  );
 }
 
 export function App({ bridge }: AppProps) {
@@ -131,12 +142,7 @@ export function App({ bridge }: AppProps) {
     return (
       <div className="app">
         <header className="header">
-          <div className="brand">
-            <svg className="brand-logo" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" />
-            </svg>
-            Sitecraft
-          </div>
+          <Brand />
         </header>
         <main className="main pad">
           {loadError ? (
@@ -176,12 +182,7 @@ export function App({ bridge }: AppProps) {
   return (
     <div className="app" data-mode={bridge.mode}>
       <header className="header">
-        <div className="brand">
-          <svg className="brand-logo" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z" />
-          </svg>
-          Sitecraft
-        </div>
+        <Brand />
         {!showOnboarding && (
           <nav className="tabs" aria-label="Views">
             <button

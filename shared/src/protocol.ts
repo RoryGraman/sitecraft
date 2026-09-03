@@ -229,6 +229,9 @@ export const NATIVE_MAX_MESSAGE_BYTES = 1024 * 1024;
 /** Cap for the DOM snapshot sent to the agent, in characters. */
 export const SNAPSHOT_MAX_CHARS = 60_000;
 
+/** How many consecutive same-tag same-class siblings a snapshot keeps. */
+export const SNAPSHOT_MAX_REPEATED_SIBLINGS = 5;
+
 /** Cap for one inspect_page result, in characters. */
 export const INSPECT_MAX_CHARS = 20_000;
 

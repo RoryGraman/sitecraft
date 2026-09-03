@@ -442,6 +442,13 @@ describe('systemPrompt', () => {
     expect(p).not.toContain('a'.repeat(401));
   });
 
+  it('buildUserPrompt suggests the page host pattern for web pages only', () => {
+    expect(buildUserPrompt(PAYLOAD)).toContain('Default match pattern: https://www.youtube.com/*');
+    const local = buildUserPrompt({ ...PAYLOAD, page: { ...PAYLOAD.page, url: 'file:///Users/me/page.html' } });
+    expect(local).not.toContain('Default match pattern');
+    expect(local).not.toContain('file:///*');
+  });
+
   it('buildUserPrompt fences a snapshot that contains backticks safely', () => {
     const p = buildUserPrompt({ ...PAYLOAD, page: { ...PAYLOAD.page, snapshot: 'x ``` y' } });
     expect(p).toContain('x ``` y');

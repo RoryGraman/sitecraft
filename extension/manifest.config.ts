@@ -1,5 +1,7 @@
 import { defineManifest } from '@crxjs/vite-plugin';
 import { EXTENSION_PUBLIC_KEY, HARNESS_ORIGINS } from '../shared/src/extension.ts';
+import { isHarnessBuild } from './buildFlags.ts';
+import pkg from './package.json' with { type: 'json' };
 
 // Vite loads this file in Node. The extension tsconfig has no Node types.
 declare const process: { env: Record<string, string | undefined> };
@@ -14,11 +16,11 @@ const ICONS = { 16: 'icons/16.png', 32: 'icons/32.png', 48: 'icons/48.png', 128:
  * connect to the extension at all.
  */
 export default defineManifest((env) => {
-  const harness = env.mode === 'harness' || process.env.SITECRAFT_HARNESS === '1';
+  const harness = isHarnessBuild(env.mode, process.env);
   return {
     manifest_version: 3,
     name: harness ? 'Sitecraft (harness build)' : 'Sitecraft',
-    version: '0.1.0',
+    version: pkg.version,
     description: 'Customize any website with plain language.',
     key: EXTENSION_PUBLIC_KEY,
     minimum_chrome_version: '120',

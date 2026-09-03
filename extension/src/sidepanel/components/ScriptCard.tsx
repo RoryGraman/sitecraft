@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { PRIORITIES, type Priority, type ScriptError, type SiteScript } from '@sitecraft/shared';
-import { errorMessage, formatTime, truncate } from '../util';
+import { formatTime, truncate, useAction } from '../util';
 
 /**
  * The edit and delete state of one card. The parent owns it, keyed by script
@@ -30,20 +29,7 @@ export interface ScriptCardProps {
 
 export function ScriptCard(props: ScriptCardProps) {
   const { script, error, ui, onUi } = props;
-  const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  async function run(fn: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setActionError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setActionError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { busy, error: actionError, run } = useAction();
 
   return (
     <article className={script.enabled ? 'card' : 'card card-off'} data-testid="script-card" data-script-id={script.id}>

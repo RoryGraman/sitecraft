@@ -13,7 +13,7 @@
  *   inspectResult -> resolves the matching pending inspect
  */
 import { randomUUID } from 'node:crypto';
-import { NATIVE_MAX_MESSAGE_BYTES } from '@sitecraft/shared';
+import { NATIVE_MAX_MESSAGE_BYTES, errorMessage, isRecord } from '@sitecraft/shared';
 import type { AgentRequest, ExtensionHello, HostInbound, HostOutbound } from '@sitecraft/shared';
 import type { AgentHooks, AgentRunOptions, RunAgentFn } from './agent.js';
 import { FrameParser, FrameTooLargeError, encodeJsonFrame } from './framing.js';
@@ -64,10 +64,6 @@ interface ActiveRun {
   inspects: Set<string>;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
 function isHostInbound(v: unknown): v is HostInbound {
   return isRecord(v) && typeof v.type === 'string' && INBOUND_TYPES.has(v.type) && typeof v.requestId === 'string';
 }
@@ -89,11 +85,6 @@ function isAgentRequest(v: unknown): v is AgentRequest {
 function readHello(v: unknown): ExtensionHello | null {
   if (!isRecord(v) || typeof v.version !== 'string' || typeof v.userScriptsEnabled !== 'boolean') return null;
   return { version: v.version, userScriptsEnabled: v.userScriptsEnabled };
-}
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message || err.name;
-  return String(err);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -158,22 +149,22 @@ export function startHost(io: HostIo, deps: HostDeps): HostHandle {
 
   // ---- inspect bookkeeping -------------------------------------------------
 
-  function rejectInspect(id: string, err: Error): void {
+  /** Removes a pending inspect and stops its timer. */
+  function takeInspect(id: string): PendingInspect | undefined {
     const pending = inspects.get(id);
-    if (!pending) return;
+    if (!pending) return undefined;
     inspects.delete(id);
     clearTimeout(pending.timer);
     runs.get(pending.runId)?.inspects.delete(id);
-    pending.reject(err);
+    return pending;
+  }
+
+  function rejectInspect(id: string, err: Error): void {
+    takeInspect(id)?.reject(err);
   }
 
   function resolveInspect(id: string, html: string): void {
-    const pending = inspects.get(id);
-    if (!pending) return;
-    inspects.delete(id);
-    clearTimeout(pending.timer);
-    runs.get(pending.runId)?.inspects.delete(id);
-    pending.resolve(html);
+    takeInspect(id)?.resolve(html);
   }
 
   function requestInspect(runId: string, run: ActiveRun, selector: string): Promise<string> {

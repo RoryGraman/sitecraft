@@ -10,6 +10,8 @@
  * shared/protocol.ts; the host enforces that separately).
  */
 
+import { errorMessage } from '@sitecraft/shared';
+
 export const HEADER_BYTES = 4;
 export const DEFAULT_MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
@@ -30,7 +32,7 @@ export class FrameDecodeError extends Error {
     public readonly raw: Buffer,
     cause: unknown,
   ) {
-    super(`Frame body is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+    super(`Frame body is not valid JSON: ${errorMessage(cause)}`, { cause });
     this.name = 'FrameDecodeError';
   }
 }

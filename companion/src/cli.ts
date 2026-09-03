@@ -15,7 +15,7 @@ import { accessSync, constants as fsConstants, existsSync, readFileSync, realpat
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXTENSION_ID } from '@sitecraft/shared';
+import { EXTENSION_ID, errorMessage, isRecord } from '@sitecraft/shared';
 import pkg from '../package.json';
 import { checkClaudeLogin, runAgent, type AgentRunOptions } from './agent.js';
 import { writeExtensionRecord } from './hello.js';
@@ -133,10 +133,6 @@ function err(line: string): void {
   process.stderr.write(line + '\n');
 }
 
-function messageOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -150,12 +146,11 @@ export function readHostConfig(home: string, logger: Logger): HostConfig {
   const file = path.join(sitecraftHome(home), CONFIG_FILENAME);
   if (!existsSync(file)) return {};
   try {
-    const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    const rec: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    if (!isRecord(rec)) {
       logger.warn('config.json ignored: not an object', file);
       return {};
     }
-    const rec = raw as Record<string, unknown>;
     const config: HostConfig = {};
     if (typeof rec.model === 'string' && rec.model.trim() !== '') config.model = rec.model.trim();
     else if (rec.model !== undefined) logger.warn('config.json: "model" must be a non-empty string; ignored');
@@ -166,7 +161,7 @@ export function readHostConfig(home: string, logger: Logger): HostConfig {
     }
     return config;
   } catch (e) {
-    logger.warn('config.json ignored: could not parse', messageOf(e));
+    logger.warn('config.json ignored: could not parse', errorMessage(e));
     return {};
   }
 }
@@ -199,7 +194,7 @@ async function cmdHost(origin: string | undefined): Promise<number> {
       agentOptions,
       onHello: (hello) => {
         writeExtensionRecord(os.homedir(), hello, VERSION).catch((e: unknown) => {
-          logger.warn('Could not record the extension hello', messageOf(e));
+          logger.warn('Could not record the extension hello', errorMessage(e));
         });
       },
     },
@@ -216,7 +211,7 @@ async function cmdHost(origin: string | undefined): Promise<number> {
     logger.error('Uncaught exception', e.stack ?? e.message);
   });
   process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled rejection', messageOf(reason));
+    logger.error('Unhandled rejection', errorMessage(reason));
   });
 
   await handle.done;
@@ -320,7 +315,7 @@ function checkManifest(p: string, wrapper: string, extensionId: string): { ok: b
     }
     return { ok: true, note: 'ok' };
   } catch (e) {
-    return { ok: false, note: `unreadable: ${messageOf(e)}` };
+    return { ok: false, note: `unreadable: ${errorMessage(e)}` };
   }
 }
 
@@ -371,7 +366,7 @@ async function cmdDoctor(args: ParsedArgs): Promise<number> {
     try {
       p = hostManifestPath(b, home, platform);
     } catch (e) {
-      out(`  manifest:  ${b}: ${messageOf(e)}`);
+      out(`  manifest:  ${b}: ${errorMessage(e)}`);
       if (explicit !== undefined) failures++;
       continue;
     }
@@ -396,7 +391,7 @@ async function cmdDoctor(args: ParsedArgs): Promise<number> {
     out(`  claude:    ${login.ok ? 'ok' : 'FAIL'} ${login.detail}`);
     if (!login.ok) failures++;
   } catch (e) {
-    out(`  claude:    FAIL ${messageOf(e)}`);
+    out(`  claude:    FAIL ${errorMessage(e)}`);
     failures++;
   }
 
@@ -435,14 +430,15 @@ export async function main(argv: string[]): Promise<number> {
         return 2;
     }
   } catch (e) {
-    err(`sitecraft ${args.command}: ${messageOf(e)}`);
+    err(`sitecraft ${args.command}: ${errorMessage(e)}`);
     return 1;
   }
 }
 
-const isHostMode = parseArgs(process.argv.slice(2)).command === 'host';
+const argv = process.argv.slice(2);
+const isHostMode = parseArgs(argv).command === 'host';
 
-main(process.argv.slice(2)).then(
+main(argv).then(
   (code) => {
     process.exitCode = code;
     // Let pending writes drain, then force the exit if something (an SDK
@@ -450,7 +446,7 @@ main(process.argv.slice(2)).then(
     setTimeout(() => process.exit(code), isHostMode ? 500 : 1500).unref();
   },
   (e: unknown) => {
-    err(`sitecraft: ${messageOf(e)}`);
+    err(`sitecraft: ${errorMessage(e)}`);
     process.exitCode = 1;
     setTimeout(() => process.exit(1), 500).unref();
   },

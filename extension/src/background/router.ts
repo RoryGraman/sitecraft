@@ -9,7 +9,7 @@
  * activeTabChanged from the tab watcher (see tabs.ts and index.ts).
  */
 
-import { SCHEMA_VERSION, parseExportFile, validateSiteScript } from '@sitecraft/shared';
+import { SCHEMA_VERSION, errorMessage, parseExportFile, validateSiteScript } from '@sitecraft/shared';
 import type {
   ContentMessage,
   ExportFile,
@@ -77,10 +77,6 @@ export const AUTH_OK_TTL_MS = 5 * 60_000;
 export const AUTH_FAIL_TTL_MS = 5_000;
 
 type AuthResult = { ok: boolean; detail: string };
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 function isRequestEnvelope(msg: unknown): msg is SidebarRequestEnvelope {
   if (typeof msg !== 'object' || msg === null) return false;

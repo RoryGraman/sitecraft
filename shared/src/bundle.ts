@@ -11,6 +11,7 @@
  * later (higher-number) rules win on equal specificity.
  */
 
+import { matchesPattern } from './matchPattern.js';
 import { PRIORITIES, type SiteScript } from './types.js';
 
 export interface JsBundle {
@@ -22,7 +23,7 @@ export interface JsBundle {
 }
 
 /** Prefix for chrome.userScripts registration ids. */
-export const BUNDLE_ID_PREFIX = 'sitecraft-';
+const BUNDLE_ID_PREFIX = 'sitecraft-';
 
 function isActiveJs(s: SiteScript): boolean {
   return s.enabled && s.kind === 'js';
@@ -126,6 +127,11 @@ export function buildCssBundle(scripts: SiteScript[]): string {
   return ordered
     .map((s) => `/* sitecraft:${s.id} ${safeCommentText(s.name)} */\n${s.code}`)
     .join('\n\n');
+}
+
+/** CSS bundle for the enabled css scripts whose pattern matches `url`. Empty when none. */
+export function cssForUrl(scripts: SiteScript[], url: string): string {
+  return buildCssBundle(scripts.filter((s) => isActiveCss(s) && matchesPattern(s.urlPattern, url)));
 }
 
 /** Keep a name from terminating the CSS comment that wraps it. */

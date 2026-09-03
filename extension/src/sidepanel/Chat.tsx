@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { MODELS } from '@sitecraft/shared';
+import { MODELS, errorMessage } from '@sitecraft/shared';
 import type { SidebarRequest, SidebarState, SiteScript } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
 import { TabPicker } from './components/TabPicker';
 import type { PageState } from './usePage';
-import { errorMessage, mutate } from './util';
+import { mutate, useAction } from './util';
 
 export interface ChatProps {
   bridge: Bridge;
@@ -313,21 +313,8 @@ interface ResultCardProps {
 }
 
 function ResultCard({ item, live, onKeep, onUndo, onModify }: ResultCardProps) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAction();
   const script = live ?? item.snapshot;
-
-  async function run(fn: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   let status: string;
   if (!live) status = 'This script was deleted.';

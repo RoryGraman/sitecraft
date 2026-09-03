@@ -12,7 +12,9 @@
  */
 
 import {
-  buildCssBundle,
+  cssForUrl,
+  errorMessage,
+  isRecord,
   matchesPattern,
   type ContentMessage,
   type ScriptErrorPost,
@@ -77,16 +79,11 @@ export interface ContentDeps {
 
 /**
  * CSS bundle for `url` from a raw `scripts` value read from storage.
- * Same rule as background/css.ts cssForUrl: enabled css scripts whose pattern
- * matches, ordered by priority (1 first). Re-implemented here to keep the
- * content bundle small. Malformed entries are skipped.
+ * Malformed entries are skipped.
  */
 export function computeCss(scripts: unknown, url: string): string {
   if (!Array.isArray(scripts)) return '';
-  const matching = scripts.filter(
-    (s): s is SiteScript => isSiteScriptLike(s) && s.enabled && s.kind === 'css' && matchesPattern(s.urlPattern, url),
-  );
-  return buildCssBundle(matching);
+  return cssForUrl(scripts.filter(isSiteScriptLike), url);
 }
 
 /**
@@ -251,7 +248,7 @@ export function handleContentRequest(doc: Document, message: unknown): TakeSnaps
     try {
       return elementOuterHtml(doc, selector, maxChars);
     } catch (e) {
-      return { ok: false, error: `Inspect failed: ${errorText(e)}` };
+      return { ok: false, error: `Inspect failed: ${errorMessage(e)}` };
     }
   }
   return undefined;
@@ -339,10 +336,6 @@ function globalChrome(): ChromeLike | undefined {
   return candidate as unknown as ChromeLike;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function isSiteScriptLike(value: unknown): value is SiteScript {
   return (
     isRecord(value) &&
@@ -371,8 +364,4 @@ function isStyleElement(el: Element | null): el is HTMLStyleElement {
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return isRecord(value) && typeof (value as { then?: unknown }).then === 'function';
-}
-
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }

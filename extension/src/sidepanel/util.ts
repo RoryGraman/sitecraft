@@ -1,10 +1,6 @@
-import type { SidebarRequest, SidebarState } from '@sitecraft/shared';
+import { useState } from 'react';
+import { errorMessage, type SidebarRequest, type SidebarState } from '@sitecraft/shared';
 import type { Bridge } from '../lib/bridge';
-
-export function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return String(e);
-}
 
 export function hostOf(url: string): string {
   try {
@@ -44,4 +40,22 @@ export type StateMutation = Extract<
 export async function mutate(bridge: Bridge, req: StateMutation, onState: (state: SidebarState) => void): Promise<void> {
   const state: SidebarState = await bridge.request(req);
   onState(state);
+}
+
+/** One async action at a time, with its error kept for display. */
+export function useAction(): { busy: boolean; error: string | null; run(fn: () => Promise<void>): Promise<void> } {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run(fn: () => Promise<void>): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return { busy, error, run };
 }

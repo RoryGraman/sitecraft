@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ContentMessage } from '@sitecraft/shared';
 import { createStateStore } from '../src/background/state';
-import { cssForUrl, handleCssBlocked, installCssFallback } from '../src/background/css';
+import { handleCssBlocked, installCssFallback } from '../src/background/css';
 import { FakeEvent, FakeStorageArea, mkScript, resetIds, tick } from './router.fakes';
 
 type MessageListener = (
@@ -15,52 +15,6 @@ const g = globalThis as unknown as { chrome?: unknown };
 afterEach(() => {
   delete g.chrome;
   resetIds();
-});
-
-describe('cssForUrl', () => {
-  it('returns an empty string when nothing matches', () => {
-    expect(cssForUrl([], 'https://a.com/')).toBe('');
-    const js = mkScript({ kind: 'js' });
-    expect(cssForUrl([js], 'https://a.com/')).toBe('');
-  });
-
-  it('keeps only enabled css scripts whose pattern matches the url', () => {
-    const match = mkScript({ kind: 'css', code: 'a{color:red}', urlPattern: 'https://a.com/*' });
-    const disabled = mkScript({ kind: 'css', code: 'b{color:red}', urlPattern: 'https://a.com/*', enabled: false });
-    const otherSite = mkScript({ kind: 'css', code: 'c{color:red}', urlPattern: 'https://b.com/*' });
-    const js = mkScript({ kind: 'js', code: 'd()', urlPattern: 'https://a.com/*' });
-    const out = cssForUrl([match, disabled, otherSite, js], 'https://a.com/path?x=1');
-    expect(out).toContain('a{color:red}');
-    expect(out).toContain(`sitecraft:${match.id}`);
-    expect(out).not.toContain('b{color:red}');
-    expect(out).not.toContain('c{color:red}');
-    expect(out).not.toContain('d()');
-  });
-
-  it('orders blocks by priority, 1 first, then by createdAt', () => {
-    const p3 = mkScript({ kind: 'css', code: 'p3{}', priority: 3 });
-    const p1 = mkScript({ kind: 'css', code: 'p1{}', priority: 1 });
-    const p5 = mkScript({ kind: 'css', code: 'p5{}', priority: 5 });
-    const p3b = mkScript({ kind: 'css', code: 'p3b{}', priority: 3 });
-    const out = cssForUrl([p5, p3b, p3, p1], 'https://a.com/');
-    const order = ['p1{}', 'p3{}', 'p3b{}', 'p5{}'].map((s) => out.indexOf(s));
-    expect(order.every((i) => i >= 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-  });
-
-  it('matches subdomain and path patterns', () => {
-    const sub = mkScript({ kind: 'css', code: 'sub{}', urlPattern: '*://*.example.com/*' });
-    const path = mkScript({ kind: 'css', code: 'path{}', urlPattern: 'https://example.com/docs/*' });
-    expect(cssForUrl([sub, path], 'https://www.example.com/x')).toContain('sub{}');
-    expect(cssForUrl([sub, path], 'https://www.example.com/x')).not.toContain('path{}');
-    expect(cssForUrl([sub, path], 'https://example.com/docs/1')).toContain('path{}');
-  });
-
-  it('returns an empty string for an unsupported url', () => {
-    const css = mkScript({ kind: 'css', code: 'x{}' });
-    expect(cssForUrl([css], 'chrome://extensions')).toBe('');
-    expect(cssForUrl([css], 'not a url')).toBe('');
-  });
 });
 
 describe('handleCssBlocked', () => {

@@ -20,7 +20,7 @@
  *     marker <!-- sitecraft: truncated --> fits in maxChars.
  */
 
-import { INSPECT_MAX_CHARS, SNAPSHOT_MAX_CHARS } from '@sitecraft/shared';
+import { INSPECT_MAX_CHARS, SNAPSHOT_MAX_CHARS, SNAPSHOT_MAX_REPEATED_SIBLINGS, errorMessage } from '@sitecraft/shared';
 
 export interface SnapshotOptions {
   /** Hard cap on the result length, marker included. Default SNAPSHOT_MAX_CHARS. */
@@ -36,7 +36,6 @@ export type ElementOuterHtmlResult =
 /** Appended when the output had to be cut. */
 export const TRUNCATED_MARKER = '<!-- sitecraft: truncated -->';
 
-const DEFAULT_MAX_REPEATED_SIBLINGS = 5;
 const MAX_STYLE_ATTR_CHARS = 200;
 const MAX_SRCSET_ATTR_CHARS = 200;
 const MAX_DATA_URL_CHARS = 100;
@@ -59,7 +58,7 @@ const LONG_DATA_URL = new RegExp(`data:[^\\s'")]{${MAX_DATA_URL_CHARS - 5 + 1},}
 
 export function snapshotDom(root: Document | Element, opts: SnapshotOptions = {}): string {
   const maxChars = opts.maxChars ?? SNAPSHOT_MAX_CHARS;
-  const maxRepeated = opts.maxRepeatedSiblings ?? DEFAULT_MAX_REPEATED_SIBLINGS;
+  const maxRepeated = opts.maxRepeatedSiblings ?? SNAPSHOT_MAX_REPEATED_SIBLINGS;
 
   const source = isDocument(root) ? root.documentElement : root;
   if (!source) return '';
@@ -213,8 +212,4 @@ function capLength(html: string, maxChars: number): string {
   if (html.length <= maxChars) return html;
   const cut = Math.max(0, maxChars - TRUNCATED_MARKER.length);
   return html.slice(0, cut) + TRUNCATED_MARKER;
-}
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }

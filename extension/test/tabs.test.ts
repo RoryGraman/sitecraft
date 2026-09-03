@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTabWatcher, toActiveTab, type ActiveTabChange, type TabWatchApi } from '../src/background/tabs';
+import { createTabWatcher, isWebUrl, toActiveTab, type ActiveTabChange, type TabWatchApi } from '../src/background/tabs';
 import { FakeArgsEvent, FakeEvent, mkTab, tick } from './router.fakes';
 
 type UpdatedArgs = [number, chrome.tabs.OnUpdatedInfo, chrome.tabs.Tab];
@@ -182,5 +182,17 @@ describe('createTabWatcher: dispose', () => {
     watcher.dispose();
     watcher.dispose();
     expect(onActivated.listeners.size).toBe(0);
+  });
+});
+
+describe('isWebUrl', () => {
+  it('accepts http, https and file urls only', () => {
+    expect(isWebUrl('https://a.com/')).toBe(true);
+    expect(isWebUrl('http://localhost:4174/')).toBe(true);
+    expect(isWebUrl('file:///tmp/x.html')).toBe(true);
+    expect(isWebUrl('chrome://extensions')).toBe(false);
+    expect(isWebUrl('about:blank')).toBe(false);
+    expect(isWebUrl('')).toBe(false);
+    expect(isWebUrl(undefined)).toBe(false);
   });
 });

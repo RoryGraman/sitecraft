@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildCssBundle, buildJsBundles, renderJsBundle, shortHash } from '../src/bundle.js';
+import { buildCssBundle, buildJsBundles, cssForUrl, renderJsBundle, shortHash } from '../src/bundle.js';
 import type { SiteScript } from '../src/types.js';
 
 let counter = 0;
@@ -320,5 +320,32 @@ describe('buildCssBundle', () => {
     const afterComment = css.slice(css.indexOf('*/') + 2);
     expect(afterComment).not.toContain('display: none');
     expect(afterComment).toContain('.x{}');
+  });
+});
+
+describe('cssForUrl', () => {
+  it('returns an empty string when nothing matches', () => {
+    expect(cssForUrl([], 'https://a.com/')).toBe('');
+    expect(cssForUrl([mk({ kind: 'js', code: 'd()' })], 'https://a.com/')).toBe('');
+  });
+
+  it('keeps only enabled css scripts whose pattern matches the url, priority 1 first', () => {
+    const match = mk({ kind: 'css', code: 'a{}', priority: 5 });
+    const first = mk({ kind: 'css', code: 'p1{}', priority: 1 });
+    const disabled = mk({ kind: 'css', code: 'b{}', enabled: false });
+    const otherSite = mk({ kind: 'css', code: 'c{}', urlPattern: 'https://b.com/*' });
+    const js = mk({ kind: 'js', code: 'd()' });
+    const out = cssForUrl([match, disabled, otherSite, js, first], 'https://a.com/path?x=1');
+    expect(out).toContain(`sitecraft:${match.id}`);
+    expect(out.indexOf('p1{}')).toBeLessThan(out.indexOf('a{}'));
+    expect(out).not.toContain('b{}');
+    expect(out).not.toContain('c{}');
+    expect(out).not.toContain('d()');
+  });
+
+  it('returns an empty string for an unsupported url', () => {
+    const css = mk({ kind: 'css', code: 'x{}' });
+    expect(cssForUrl([css], 'chrome://extensions')).toBe('');
+    expect(cssForUrl([css], 'not a url')).toBe('');
   });
 });

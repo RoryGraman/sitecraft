@@ -45,13 +45,10 @@ export interface ScriptError {
 
 export interface Settings {
   onboardingDone: boolean;
-  /** Native messaging host name. Fixed for v1 but stored for future flexibility. */
-  companionHostName: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   onboardingDone: false,
-  companionHostName: 'com.sitecraft.companion',
 };
 
 export const NATIVE_HOST_NAME = 'com.sitecraft.companion';
@@ -94,8 +91,6 @@ export const MODELS = [
   { id: 'claude-opus-4-8', label: 'Opus 4.8' },
   { id: 'claude-sonnet-5', label: 'Sonnet 5' },
 ] as const;
-
-export type ModelId = (typeof MODELS)[number]['id'];
 
 export interface TabInfo {
   tabId: number;

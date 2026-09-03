@@ -16,10 +16,5 @@ export const EXTENSION_PUBLIC_KEY =
 
 export const EXTENSION_ID = 'hoadedohbfjjmkajibiafgoajoicjdba';
 
-export const EXTENSION_ORIGIN = `chrome-extension://${EXTENSION_ID}/`;
-
 /** Dev harness origins allowed to connect (externally_connectable). */
 export const HARNESS_ORIGINS = ['http://localhost/*', 'http://127.0.0.1/*'];
-
-export const HARNESS_PORT = 4173;
-export const FIXTURE_PORT = 4174;

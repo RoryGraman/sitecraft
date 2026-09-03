@@ -1,40 +1,12 @@
 # Sitecraft
 
-Customize any website with plain language.
+**Tell a website what to change. It stays changed.**
 
-Sitecraft is a Chrome extension (Manifest V3) plus a small local Node companion. You open the side panel on any page and type a request, such as "hide the promo banner". A Claude agent reads a trimmed copy of the page, writes a small CSS rule or JavaScript snippet, and the extension saves it. The script runs on every later visit to matching pages. You can keep it, undo it, edit it, or ask for changes in the same chat.
+Open the side panel on any page and type "hide the promo banner". A Claude agent reads the page, writes a small CSS rule or JS snippet, and saves it. The snippet runs on every later visit. Keep it, undo it, edit it, or ask for something else.
 
-Everything stays on your machine. Scripts live in the browser's local storage. The AI runs in the companion, a Node program that reuses your Claude Code login. There are no accounts, no analytics, and no remote storage. The only outside traffic is the agent call to Anthropic.
+Nothing leaves your machine except the agent call. No accounts, no analytics, no server, no API key.
 
-- Full guide (harness, end to end checklist, full troubleshooting): [docs/README.md](docs/README.md)
-- Design spec: [docs/superpowers/specs/2026-08-18-sitecraft-design.md](docs/superpowers/specs/2026-08-18-sitecraft-design.md)
-
-## How it works
-
-Two parts talk over Chrome native messaging.
-
-```
-+------------------------------ Chrome ------------------------------+
-|  Side panel (React)  <-- Port -->  Background service worker        |
-|  Chat | Manager | Onboarding       storage, native port, bundles   |
-|  Content script (document_start)   chrome.userScripts (MAIN world)  |
-|  saved CSS, error relay, snapshots  saved JS bundles per pattern    |
-+---------------------------------|----------------------------------+
-                                  | stdio, length framed JSON
-                                  v
-                    Companion (Node, com.sitecraft.companion)
-                    Claude Agent SDK + one tool: inspect_page
-                                  |
-                                  v
-                          Anthropic API (your Claude login)
-```
-
-- The side panel follows the active tab of its window. Chat sends your request. Manager lists the scripts that match the page.
-- The background worker owns storage, the native messaging port, and `chrome.userScripts` registration. It validates every agent result before saving.
-- The content script injects saved CSS at `document_start`. Saved JS runs through `chrome.userScripts` in the page's MAIN world.
-- The companion speaks only over stdin and stdout. It opens no network port. It runs the Claude Agent SDK with one tool, `inspect_page`, which reads live page elements on request.
-
-## Quick start
+## Install
 
 ```sh
 git clone https://github.com/RoryGraman/sitecraft
@@ -42,151 +14,97 @@ cd sitecraft
 ./setup
 ```
 
-The wizard does everything a script can do: it checks your tools, builds the project, installs the companion, and checks your Claude login. Then it opens the right Chrome pages and watches your browser. It confirms each manual step live as you do it. Only the browser steps stay manual, because Chrome requires a human for them: turn on **Developer mode** once, click **Load unpacked**, turn on **Allow User Scripts**, and click **Update** to restart the extension.
+The wizard builds the project, installs the companion, and walks you through the three clicks Chrome will not let a script do for you: **Developer mode**, **Load unpacked**, **Allow User Scripts**. It watches the browser and confirms each one. Safe to run again at any time; `./setup --help` lists the options.
 
-Run `./setup` again at any time. It is safe to re-run: the build steps re-run quickly, and finished Chrome steps are skipped. `./setup --help` lists the options (`--browser brave`, `--skip-login`, `--uninstall`, and more).
+You need Chrome 120 or newer (138+ is the tested path), Node 20+, pnpm 9, and macOS or Linux. You also need a Claude Code login: run `claude` in a terminal and sign in once. Runs bill to that subscription.
 
-## Requirements
+Doing it by hand instead: [docs/README.md](docs/README.md).
 
-- Google Chrome 120 or newer. Chrome 138 or newer is the tested path.
-- Node 20 or newer.
-- pnpm 9 (see `packageManager` in `package.json`). Install with `npm install -g pnpm@9` or `corepack enable`.
-- A Claude Code login on this machine. Install Claude Code, run `claude` in a terminal, and sign in once. Agent runs bill to that subscription.
-- macOS or Linux. Windows is not supported yet.
+## Ask for things
 
-## Manual setup
+- "hide the promo banner"
+- "make the comments section wider"
+- "add a button that scrolls to the top"
+- "hide the widget that appears after the page loads"
+- "make this page dark"
 
-`./setup` does all of the steps below for you. Use this path when you want each step by hand. Run every command from the repository root.
+Vague is fine. The agent inspects live elements before it writes anything.
 
-### 1. Build
+## What comes back
 
-```sh
-pnpm install
-pnpm build
+One script: a name, a description, a match pattern, and the code (`css` or `js`). The tab reloads so you can see it work.
+
+- **Keep** — you are done.
+- **Undo** — turns it off and reloads. It waits in the Manager if you change your mind.
+- **Modify** — your next message edits that same script.
+
+The **Manager** tab lists the scripts for the current page, or for every site. Toggle them, set priority 1 to 5, edit the code by hand, delete, or read the last error a script threw. Export and import are plain JSON.
+
+## How it works
+
+```
++-------------------------- Chrome ---------------------------+
+|  Side panel  <--->  Background worker                       |
+|                     storage, native port, script bundles    |
+|  Content script     chrome.userScripts (MAIN world)         |
++------------------------------|------------------------------+
+                               | stdio, framed JSON
+                               v
+                 Companion (Node, on your machine)
+                 Claude Agent SDK + one tool: inspect_page
+                               |
+                               v
+                     Anthropic API (your Claude login)
 ```
 
-This produces two outputs:
+Saved CSS goes in before first paint. Saved JS runs through `chrome.userScripts` in the page's MAIN world, one bundle per URL pattern, each script in its own try/catch. The background worker validates every agent result before it saves it. The companion has no network port; Chrome starts it on demand and only this extension may do so.
 
-- `extension/dist`: the unpacked extension.
-- `companion/dist/cli.js`: the companion bundle.
+## Settings
 
-This is the production build. No web page can connect to the extension.
+`~/.sitecraft/config.json` is optional:
 
-### 2. Load the extension
-
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and choose the `extension/dist` folder.
-4. Confirm the card shows the id `hoadedohbfjjmkajibiafgoajoicjdba`. The id is fixed by `manifest.key`, so it is the same on every machine. The companion depends on it.
-
-### 3. Allow user scripts
-
-1. Open `chrome://extensions/?id=hoadedohbfjjmkajibiafgoajoicjdba`.
-2. Turn on the **Allow User Scripts** switch.
-3. Click **Update** at the top of `chrome://extensions` (or the reload icon on the Sitecraft card). The switch alone does not restart the extension; the reload does, and Sitecraft registers your scripts on that restart.
-
-This per-extension switch lets `chrome.userScripts` run saved code, even on sites with a strict content security policy. On Chrome 120 to 137 the switch does not exist; keep Developer mode on instead.
-
-### 4. Install the companion
-
-```sh
-node companion/bin/sitecraft.js install
+```json
+{ "model": "claude-opus-5", "maxTurns": 16 }
 ```
 
-This writes two files:
+The log is `~/.sitecraft/companion.log`. Delete it whenever you like.
 
-- `~/.sitecraft/sitecraft-host.sh`: a wrapper that runs the companion. It holds the absolute paths of your Node binary and this checkout.
-- The native messaging host manifest `com.sitecraft.companion.json` in Chrome's messaging directory. On macOS that is `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`. On Linux it is `~/.config/google-chrome/NativeMessagingHosts/`.
-
-The installer does not copy code. It points at this checkout. If you move the repo or change your Node version, run `install` again.
-
-Options:
-
-- `--browser chrome,brave,edge`: install for several Chromium browsers (default `chrome`).
-- `--extension-id <id>`: use a different id (only if you changed `manifest.key`).
-
-Check the setup any time:
+## When it breaks
 
 ```sh
 node companion/bin/sitecraft.js doctor
 ```
 
-### 5. Sign in to Claude
+That catches most of it. The rest:
 
-Run `claude` in a terminal and complete the login, if you have not already.
+- Chrome says the native host is missing or forbidden → `node companion/bin/sitecraft.js install`, then Retry in the panel.
+- The onboarding row for user scripts stays off → reload the extension at `chrome://extensions`.
+- The result looks right but the page did not change → check the Manager for a last error, then reload the tab.
+- A run gives up on turns → raise `maxTurns`, or ask for less at once.
 
-### 6. Open the panel
-
-Click the Sitecraft toolbar icon on any normal web page. The Onboarding checklist opens the first time. It shows a live pass or fail state for the three steps above. Click **Continue** when all three pass.
-
-## Running the companion
-
-You never run the companion by hand. Chrome starts it on demand through the wrapper when the panel connects. It exits when the panel disconnects.
-
-- It reads and writes only framed messages over stdin and stdout. It opens no port.
-- Logs go to `~/.sitecraft/companion.log`.
-- Chrome starts a fresh process for each connection, so a new `pnpm build` is used on the next request. No extension reload is needed for a companion change.
-
-Companion commands:
-
-```sh
-node companion/bin/sitecraft.js install   [--browser a,b] [--extension-id <id>]
-node companion/bin/sitecraft.js uninstall [--browser a,b]
-node companion/bin/sitecraft.js doctor    [--browser a,b] [--extension-id <id>]
-node companion/bin/sitecraft.js --version
-node companion/bin/sitecraft.js --help
-```
-
-## Daily use
-
-1. Open a site. The panel follows the active tab. The page strip under the header shows its host and title.
-2. In **Chat**, type a request and click **Send**. Examples: "hide the promo banner", "make the comments wider", "add a button that scrolls to the top".
-3. On success the extension saves the script as a trial, registers it, and reloads the tab. The result card shows **Keep**, **Undo**, and **Modify**.
-   - **Keep** clears the trial flag.
-   - **Undo** disables the script and reloads the tab.
-   - **Modify** sends your next request together with the existing script, so the agent updates it in place.
-4. The **Manager** tab lists scripts for the active page by default. Switch to **All sites** for every script. Each card has an enable toggle, a priority select, an inline code editor, delete, and any last error. Export and import use plain JSON.
-
-## Configuration
-
-`~/.sitecraft/config.json` is optional. It is read each time the companion starts.
-
-```json
-{
-  "model": "claude-opus-5",
-  "maxTurns": 16
-}
-```
-
-- `model`: the Claude model for runs. Default `claude-opus-5`.
-- `maxTurns`: 1 to 200. Default 16.
-
-Invalid values are logged and ignored.
+Every Chrome error message, with its cause, is in [docs/README.md](docs/README.md).
 
 ## Development
 
 ```sh
-pnpm build        # build the extension and the companion
-pnpm test         # run the unit tests (Vitest)
-pnpm typecheck    # TypeScript, strict
-pnpm serve        # static servers for the dev harness and the fixture
-pnpm build:harness  # a build that the dev harness page can drive
+pnpm build          # extension + companion
+pnpm test           # Vitest
+pnpm typecheck      # strict
+pnpm serve          # dev harness + test fixture
+pnpm build:harness  # a build the harness page can drive
 ```
 
-The project is a pnpm workspace with three packages: `shared` (types, protocol, validators), `extension` (the MV3 extension), and `companion` (the Node host). The dev harness renders the same side panel as a normal web page, so it can be driven without opening the real side panel. See [docs/README.md](docs/README.md) for the harness, the manual end to end checklist, and the full troubleshooting table.
+A pnpm workspace: `shared` (types, protocol, validators), `extension` (MV3), `companion` (the Node host). The harness renders the side panel as a normal web page so a browser can drive it — that build alone accepts a connection from localhost, so do not browse with it. Details, the fixture page, and the end to end checklist: [docs/README.md](docs/README.md).
 
-## Privacy
+## Privacy and risk
 
-- Scripts, settings, and errors live in `chrome.storage.local` on your machine. Export produces a plain JSON file that you control.
-- No analytics, no telemetry, no accounts, no remote storage.
-- The companion opens no network port. Chrome allows only this extension's id to start it.
-- For each request the companion sends to Anthropic: your request text, the page URL and title, a trimmed DOM snapshot, the scripts already saved for that site, and the results of any `inspect_page` calls. Snapshots include visible page text, so think before using Sitecraft on pages with private data.
-- Saved JS runs in the page's MAIN world with the same power as the site's own code. Read the code before you keep it, and review anything you import.
+- Scripts and settings live in `chrome.storage.local`. Export gives you a JSON file you own.
+- Each request sends Anthropic your text, the page URL and title, a trimmed DOM snapshot, and the scripts already saved for that site. Snapshots include visible page text, so think before you use it on private pages.
+- Saved JS runs with the same power as the site's own code. Read it before you keep it, and only import files you trust.
+- No telemetry, no accounts, no remote storage. Runs use an isolated SDK session: no hooks, no MCP servers, no `CLAUDE.md`.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
-## Status
-
-Sitecraft v1. Built and tested on macOS with Chrome. Windows support, an API key mode, and script sync are out of scope for v1.
+Version 0.1.0, first release. Built and tested on macOS with Chrome. Not yet: Windows, Firefox, Safari, an API key mode, or sync between machines.

@@ -1,6 +1,6 @@
 # Sitecraft Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Historical record from the initial build (August 2026). Details may be out of date. [README.md](../../../README.md) and [docs/README.md](../../README.md) are the current source of truth.
 
 **Goal:** Build Sitecraft v1: a Chrome MV3 extension plus a local Node companion that turns plain-language requests into saved per-site CSS/JS customizations, driven by the Claude Agent SDK.
 

@@ -1,5 +1,7 @@
 # Sitecraft v1: Adversarial Review Summary
 
+> Historical record from the initial build (August 2026). Details may be out of date. [README.md](../../../README.md) and [docs/README.md](../../README.md) are the current source of truth.
+
 Date: 2026-09-01
 Method: six review lenses (Chrome API, companion, security, spec compliance, UI, shared logic) produced 36 findings. Each finding got three independent refuters. 25 findings survived a majority vote. 11 were refuted.
 

@@ -6,7 +6,7 @@ Sitecraft is a Chrome extension that customizes websites from plain language. Yo
 
 Every customization lives in your browser's local storage. The AI part runs in a small Node program on your machine, the companion, which reuses your Claude Code login. There are no accounts, no analytics, and no remote storage. The only outside traffic is the agent call to Anthropic.
 
-Related documents:
+Related documents (historical records from the initial build; this file is the current source of truth):
 
 - Design spec: [superpowers/specs/2026-08-18-sitecraft-design.md](superpowers/specs/2026-08-18-sitecraft-design.md)
 - Implementation plan: [superpowers/plans/2026-08-31-sitecraft-implementation.md](superpowers/plans/2026-08-31-sitecraft-implementation.md)
@@ -51,8 +51,8 @@ Two parts talk over Chrome native messaging.
 
 ## Requirements
 
-- Google Chrome 120 or newer. Chrome 138 or newer is the tested path. Other Chromium browsers (Chromium, Brave, Edge, Arc, Chrome Beta, Chrome Canary) work if they ship the `userScripts` API; pass `--browser` to the installer.
-- Node 20 or newer. Building from source uses pnpm 9 (see `packageManager` in `package.json`).
+- Google Chrome 120 or newer. Chrome 138 or newer is the tested path. Other Chromium browsers (Chromium, Brave, Edge, Chrome Beta, and on macOS also Arc and Chrome Canary) work if they ship the `userScripts` API; pass `--browser` to the installer.
+- Node 22 or newer. Building from source uses pnpm 9 (see `packageManager` in `package.json`).
 - A Claude Code login on this machine. Install Claude Code, run `claude` in a terminal, and sign in once. Agent runs bill to that subscription.
 - macOS or Linux. The Windows installer is not written yet (native hosts on Windows need a registry entry).
 
@@ -73,7 +73,7 @@ Two parts talk over Chrome native messaging.
 
 3. Allow user scripts.
 
-   Open `chrome://extensions/?id=hoadedohbfjjmkajibiafgoajoicjdba` and turn on the **Allow User Scripts** switch. This per-extension switch is required. It is what lets `chrome.userScripts` run saved code, even on sites with strict content security policies. Developer mode is not what gates this API on Chrome 138 and newer; only the switch does. On Chrome 120 to 137 the switch does not exist and Developer mode must stay on instead.
+   Open `chrome://extensions/?id=hoadedohbfjjmkajibiafgoajoicjdba` and turn on the **Allow User Scripts** switch. Then click **Update** at the top of `chrome://extensions` (or the reload icon on the Sitecraft card), so the extension restarts and registers your scripts. This per-extension switch is required. It is what lets `chrome.userScripts` run saved code, even on sites with strict content security policies. Developer mode is not what gates this API on Chrome 138 and newer; only the switch does. On Chrome 120 to 137 the switch does not exist and Developer mode must stay on instead.
 
 4. Install the companion.
 
@@ -106,16 +106,16 @@ The side panel sends `checkOnboarding` to the background every 2 seconds while t
 | 2. Install the companion | The background connects to `com.sitecraft.companion` with `chrome.runtime.connectNative` and sends `ping`. It waits up to 5 seconds for `pong`. | A `pong` arrives. The row then shows the companion version. | Run the install command, then click **Retry**. The row shows Chrome's disconnect reason; see Troubleshooting below. |
 | 3. Log in to Claude | The companion runs a one-turn Agent SDK query with the prompt "Reply with the single word OK." with no tools and a 60 second timeout. This step is skipped while step 2 fails. | The reply contains `OK`. | Run `claude` in a terminal, sign in, and click **Retry**. The row shows the SDK's error text. |
 
-**Continue** becomes enabled when all three pass. It stores `settings.onboardingDone = true`. On later launches the main UI opens as soon as the companion answers a ping; steps 1 and 3 are not re-checked on every launch. The **Setup** link in the footer reopens the checklist at any time.
+**Continue** becomes enabled when all three pass. It stores `settings.onboardingDone = true`. On later launches the main UI opens as soon as the companion answers a ping; step 3 is not re-checked on every launch. The **Setup** link in the footer reopens the checklist at any time.
 
-The one-turn login check costs a fraction of a cent per run. It runs once per checklist poll only while step 2 passes, and again when you click Retry.
+The one-turn login check costs a fraction of a cent per run. It runs only while step 2 passes. A success is reused for 5 minutes and a failure for 5 seconds; the companion row's **Retry** forgets the cached result.
 
 ## Daily use
 
 ### Chat
 
 1. The panel follows the active tab of its window. The page strip under the header shows that tab's host in bold and its title. Switch tabs or navigate and the strip, the Chat target, and the Manager list follow. When the active tab is not a web page (for example `chrome://extensions` or the Web Store) the strip says "No web page is active" and the composer is disabled until you open a site. The side panel has no tab picker. The picker exists only in the dev harness (see "Dev harness and fixture").
-2. Type a request and click **Send**. Examples: "hide the promo banner", "hide the Shorts shelf", "make the comments section wider", "add a button that scrolls to the top".
+2. Type a request and click **Send**. Examples: "hide the promo banner", "hide the Shorts shelf", "make the comments section wider", "add a button that scrolls to the top". The **Model** select under the input picks the model for the run; **Default model** uses the companion's configured model. The pick is remembered.
 3. A progress line shows what the agent is doing: Agent started, the first words of its reasoning, `Inspecting <selector>` when it looks at a live element, and Validating result. Click **Cancel** to abort the run.
 4. On success the extension saves the script with `trial: true`, registers the bundles, and reloads the target tab. The result card shows the name, description, kind (`css` or `js`), match pattern, and three buttons: **Keep**, **Undo**, and **Modify**.
 5. On failure the card shows the error and nothing is saved.
@@ -172,13 +172,13 @@ pnpm build:harness
 
 Only this build (Vite mode `harness`, or `SITECRAFT_HARNESS=1`) adds `externally_connectable.matches` for `http://localhost/*` and `http://127.0.0.1/*` (any port) and names the extension "Sitecraft (harness build)". A normal `pnpm build` has no `externally_connectable` key, so no web page can talk to the extension. Any page served from localhost can drive a harness build, including creating scripts, so do not use a harness build for daily browsing.
 
-How the harness connects: the harness page calls `chrome.runtime.connect('hoadedohbfjjmkajibiafgoajoicjdba', { name: 'sitecraft-sidebar' })` and the background accepts the port in `onConnectExternal` after checking the sender origin. The footer shows "Harness" in this mode. Requirements: the extension must be loaded with the stable id, and the page must be opened from `localhost` or `127.0.0.1`.
+How the harness connects: the harness page calls `chrome.runtime.connect('hoadedohbfjjmkajibiafgoajoicjdba', { name: 'sitecraft-sidebar' })` and the background accepts the port in `onConnectExternal` after checking the sender origin. The harness page header reads "Sitecraft Harness" with "bridge: external", and the panel footer gains a **Reload** button in this mode. Requirements: the extension must be loaded with the stable id, and the page must be opened from `localhost` or `127.0.0.1`.
 
 Target tab in the harness: the harness is itself a tab, so it cannot follow its own window the way the side panel does. Its Chat shows a tab picker plus a **Follow active tab** checkbox, on by default. While the checkbox is on, switching to any web tab in any window makes that tab the target. A navigation or title change on the active tab of another window does not move it; only a tab switch does. The harness page itself is never the target. Picking a tab by hand turns the checkbox off; tick it again to follow once more. **Refresh** reloads the tab list and keeps the current pick when it still exists. The first target is the most recently active `http` or `https` tab that is not the harness, so open the fixture in another tab first.
 
-Reloading the extension from the harness: the footer has a **Reload extension** link. It sends the `devReload` request and the background calls `chrome.runtime.reload()`. Only harness builds wire this request, by either path above (`extension/buildFlags.ts` holds the rule). A production build answers "Not available in this build.", which the footer shows. The port drops while the extension restarts and the harness page reconnects on its own.
+Reloading the extension from the harness: the footer has a **Reload** button. It sends the `devReload` request and the background calls `chrome.runtime.reload()`. Only harness builds wire this request, by either path above (`extension/buildFlags.ts` holds the rule). A production build answers "Not available in this build.", which the footer shows. The port drops while the extension restarts and the harness page reconnects on its own.
 
-The fixture page (`fixtures/index.html`) has a strict CSP (`default-src 'self'; script-src 'self'; style-src 'self'`). Inline styles and inline scripts from the page are blocked, which exercises both the `insertCSS` fallback and the `chrome.userScripts` path. Known elements:
+The fixture page (`fixtures/index.html`) has a strict CSP (`default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:`). Inline styles and inline scripts from the page are blocked, which exercises both the `insertCSS` fallback and the `chrome.userScripts` path. Known elements:
 
 | Element | Purpose |
 | --- | --- |
@@ -192,7 +192,7 @@ The fixture page (`fixtures/index.html`) has a strict CSP (`default-src 'self'; 
 
 ## Manual end-to-end checklist
 
-Run this after `pnpm build` with the extension loaded, Allow User Scripts on, the companion installed, and `pnpm serve` running.
+Run this after `pnpm build:harness` (a plain `pnpm build` has no harness page) with the extension loaded, Allow User Scripts on, the companion installed, and `pnpm serve` running.
 
 1. Open `http://localhost:4174/`. Confirm the promo banner, the Shorts shelf, and after half a second the late widget are visible.
 2. Open `http://localhost:4173/harness/index.html` in a second tab, or open the real side panel on the fixture tab. Confirm all three onboarding rows are green and the main UI appears. First run: click Continue.
@@ -219,7 +219,7 @@ Chrome reports native messaging failures as a short disconnect message. The exte
 | `Specified native messaging host not found.` | not-installed | No host manifest named `com.sitecraft.companion.json` in this browser's NativeMessagingHosts directory. | Run `node companion/bin/sitecraft.js install`. For a browser other than Chrome add `--browser <id>`. Click Retry. |
 | `Access to the specified native messaging host is forbidden.` | forbidden | The manifest's `allowed_origins` does not contain this extension's id. Usually the extension was loaded with a different id, for example after changing `manifest.key`. | Compare the id on the extension card with `doctor` output. Run `install --extension-id <id shown in Chrome>`. |
 | `Failed to start native messaging host.` | error | Chrome could not execute the wrapper. The wrapper is missing or not executable, the Node path baked into it no longer exists (for example after a version manager upgrade), or the checkout moved. | Run `doctor`. Run `install` again from the current checkout. Check `cat ~/.sitecraft/sitecraft-host.sh` and that both quoted paths exist. |
-| `Native host has exited.` | error | The companion process died during a request. Common causes: `companion/dist/cli.js` missing (build not run), dependencies not installed, Node older than 20, or an uncaught error. | Run `pnpm install` and `pnpm build`. Read the tail of `~/.sitecraft/companion.log`. Run `node companion/bin/sitecraft.js --version` to confirm the bundle loads. |
+| `Native host has exited.` | error | The companion process died during a request. Common causes: `companion/dist/cli.js` missing (build not run), dependencies not installed, Node older than 22, or an uncaught error. | Run `pnpm install` and `pnpm build`. Read the tail of `~/.sitecraft/companion.log`. Run `node companion/bin/sitecraft.js --version` to confirm the bundle loads. |
 | `Error when communicating with the native messaging host.` | error | Bytes that are not frames reached stdout, or a frame was malformed or too large. In practice a stray `console.log` in a dependency, or a corrupt build. | Rebuild the companion. Check the log for the last request. Nothing in `companion/src` may write to stdout except the host loop. |
 | `Companion disconnected.` | error | The host closed the port with no Chrome error while a request was pending. | Same as "Native host has exited". Check the log. |
 | `Companion ping timed out after 5000 ms.` | error | The host started but did not answer within 5 seconds. Often the first start after an install while Node loads the SDK, or a very slow disk. | Click Retry. If it repeats, run `doctor` and read the log. |
@@ -232,7 +232,7 @@ Other symptoms:
 | Row 3 says `Claude login failed. Run "claude" in a terminal and sign in, then try again.` | Run `claude` in a terminal and log in (`/login`). Click Retry. |
 | Row 3 says `Timed out after 60 s waiting for Claude.` | Network problem or a very slow first start. Click Retry. Check that `claude` works in a terminal. |
 | Row 3 mentions a rate limit, billing, or an account on hold. | The message is the SDK's account state. Fix it in your Claude account, then Retry. |
-| `The requested Claude model was not found.` | The `model` in `~/.sitecraft/config.json` is wrong. Remove the field to use the default. |
+| `The requested Claude model was not found.` | The model picked in the panel, or the `model` in `~/.sitecraft/config.json`, does not exist. Choose **Default model** in the panel; if it persists, remove the config field. |
 | A run ends with `The agent used too many turns without finishing.` | Raise `maxTurns` in the config file or make the request smaller. |
 | A run ends with a validation error naming `urlPattern`, `code`, or another field. | The agent returned a malformed script. Nothing was saved. Send the request again, with more detail if needed. |
 | The result card looks right but the page did not change. | Check row 1 (user scripts). Check the Manager for a Last error. For CSS on a strict-CSP site the content script asks the background to fall back to `insertCSS`; reload the tab once more. |

@@ -1,5 +1,7 @@
 # Sitecraft: Design Specification
 
+> Historical record from the initial build (August 2026). Details may be out of date. [README.md](../../../README.md) and [docs/README.md](../../README.md) are the current source of truth.
+
 Date: 2026-08-18
 Status: Approved design, pre-implementation
 Working name: Sitecraft (subject to change)

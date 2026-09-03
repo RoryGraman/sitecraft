@@ -1,5 +1,7 @@
 # Tab-aware side panel: design note
 
+> Historical record from the initial build (August 2026). Details may be out of date. [README.md](../../../README.md) and [docs/README.md](../../README.md) are the current source of truth.
+
 Date: 2026-09-01. Status: done.
 
 ## Goal

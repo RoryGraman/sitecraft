@@ -14,9 +14,9 @@ cd sitecraft
 ./setup
 ```
 
-The wizard builds the project, installs the companion, and walks you through the three clicks Chrome will not let a script do for you: **Developer mode**, **Load unpacked**, **Allow User Scripts**. It watches the browser and confirms each one. Safe to run again at any time; `./setup --help` lists the options.
+The wizard builds the project, installs the companion, and walks you through the clicks Chrome will not let a script do for you: **Developer mode**, **Load unpacked**, **Allow User Scripts**, then **Update** so the extension restarts. It watches the browser and confirms the load and the switch. Safe to run again at any time; `./setup --help` lists the options.
 
-You need Chrome 120 or newer (138+ is the tested path), Node 20+, pnpm 9, and macOS or Linux. You also need a Claude Code login: run `claude` in a terminal and sign in once. Runs bill to that subscription.
+You need Chrome 120 or newer (138+ is the tested path), Node 22+, pnpm 9, and macOS or Linux. You also need a Claude Code login: run `claude` in a terminal and sign in once. Runs bill to that subscription.
 
 Doing it by hand instead: [docs/README.md](docs/README.md).
 
@@ -67,6 +67,8 @@ Saved CSS goes in before first paint. Saved JS runs through `chrome.userScripts`
 { "model": "claude-opus-5", "maxTurns": 16 }
 ```
 
+The **Model** select under the chat input picks the model for one run and is remembered; **Default model** uses the `model` from this file.
+
 The log is `~/.sitecraft/companion.log`. Delete it whenever you like.
 
 ## When it breaks
@@ -90,7 +92,7 @@ Every Chrome error message, with its cause, is in [docs/README.md](docs/README.m
 pnpm build          # extension + companion
 pnpm test           # Vitest
 pnpm typecheck      # strict
-pnpm serve          # dev harness + test fixture
+pnpm serve          # serves dist and the fixture (harness page needs build:harness)
 pnpm build:harness  # a build the harness page can drive
 ```
 
@@ -101,7 +103,7 @@ A pnpm workspace: `shared` (types, protocol, validators), `extension` (MV3), `co
 - Scripts and settings live in `chrome.storage.local`. Export gives you a JSON file you own.
 - Each request sends Anthropic your text, the page URL and title, a trimmed DOM snapshot, and the scripts already saved for that site. Snapshots include visible page text, so think before you use it on private pages.
 - Saved JS runs with the same power as the site's own code. Read it before you keep it, and only import files you trust.
-- No telemetry, no accounts, no remote storage. Runs use an isolated SDK session: no hooks, no MCP servers, no `CLAUDE.md`.
+- No telemetry, no accounts, no remote storage. Runs use an isolated SDK session: no hooks, no user MCP servers, no `CLAUDE.md`.
 
 ## License
 

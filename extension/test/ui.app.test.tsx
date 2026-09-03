@@ -31,7 +31,6 @@ describe('App onboarding gate', () => {
     expect(byTestId('onboarding-companion')).toBeTruthy();
     expect(byTestId('onboarding-login')).toBeTruthy();
     expect(byTestId<HTMLButtonElement>('onboarding-continue').disabled).toBe(true);
-    expect(text()).toContain('npx sitecraft install');
     expect(text()).toContain('node companion/bin/sitecraft.js install');
     expect(text()).toContain('Specified native messaging host not found.');
     // Chat stays mounted (so a thread survives a temporary gate) but is hidden.

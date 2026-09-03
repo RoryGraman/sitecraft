@@ -16,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EXTENSION_ID, errorMessage, isRecord } from '@sitecraft/shared';
-import pkg from '../package.json';
+import { version } from '../package.json';
 import { checkClaudeLogin, runAgent, type AgentRunOptions } from './agent.js';
 import { writeExtensionRecord } from './hello.js';
 import { startHost } from './host.js';
@@ -35,7 +35,7 @@ import {
 } from './install.js';
 import { createLogger, sitecraftHome, type Logger } from './log.js';
 
-export const VERSION: string = (pkg as { version: string }).version;
+export const VERSION: string = version;
 
 const CLI_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sitecraft.js');
 const CONFIG_FILENAME = 'config.json';

@@ -173,7 +173,7 @@ export function nodeMajor(version) {
   return m ? Number(m[1]) : 0;
 }
 
-export const NODE_MIN_MAJOR = 20;
+export const NODE_MIN_MAJOR = 22;
 
 // ---------------------------------------------------------------------------
 // Platform commands

@@ -170,9 +170,6 @@ export function Onboarding(props: OnboardingProps) {
       >
         <p>The companion runs the agent on your machine. Install it once from a terminal, in the Sitecraft source checkout.</p>
         <pre className="cmd">node companion/bin/sitecraft.js install</pre>
-        <p className="muted">
-          Once the package is published: <code>npx sitecraft install</code>
-        </p>
         {status?.companion.detail && status.companion.state !== 'connected' && (
           <p className="error-text">{status.companion.detail}</p>
         )}

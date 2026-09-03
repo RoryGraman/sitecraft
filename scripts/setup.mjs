@@ -287,6 +287,7 @@ async function chromeSteps(browser, { skipChrome, noOpen }) {
     out(`  1. Open ${cyan(EXTENSIONS_URL)} and turn on Developer mode (top right).`);
     out(`  2. Click "Load unpacked" and choose ${cyan(DIST)}`);
     out(`  3. On ${cyan(DETAILS_URL)} turn on "Allow User Scripts".`);
+    out(`  4. Click "Update" at the top of ${cyan(EXTENSIONS_URL)} (or the reload icon on the Sitecraft card), so the extension restarts.`);
     return 'skipped';
   }
 
